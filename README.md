@@ -1,10 +1,10 @@
 ## BNBOT README
 
-**Overview**
+## Overview
 
 This project is a comprehensive and dynamic Discord bot built using the discord.py library, integrated with the Binance Smart Chain (BSC) via web3.py for handling blockchain interactions. The bot offers various features, including a virtual economy, role management, and mini-games, along with smart contract integration for cryptocurrency transactions.
 
-**Features**
+## Features
 
 **1. User Profiles and Economy**
 
@@ -39,7 +39,7 @@ BNB Balance Checking: Users can check their BNB and supported BEP-20 token balan
 High Roller Role: Users can purchase a special role if they accumulate enough gold.
 Administrator Tools: Commands for editing user data and managing messages are restricted to certain users.
 
-**Setup Instructions**
+## Setup Instructions
 
 **1. Requirements**
 ```
@@ -50,12 +50,12 @@ SQLite3 (comes pre-installed with Python)
 Other Python libraries: asyncio, logging, json, random, time
 ```
 **2. Configuration**
-
+```
 Discord Bot Token: Update the bot.run('YOUR_BOT_TOKEN') line with your Discord bot token.
 Game Data Channel: Replace GAME_DATA_CHANNEL_ID with the actual channel ID where game data will be sent.
 Role IDs: Replace ROLE_ID with your server's role ID for the High Roller role.
 BNB Shop Address: Set the SHOP_BNB_ADDRESS to the Binance Coin (BNB) address that will receive BNB payments.
-
+```
 **3. Database Initialization**
 
 The bot uses SQLite to store user data. On the first run, the database will be initialized automatically with a table for storing user information.
@@ -68,7 +68,7 @@ Execute the bot with:
 python bot.py
 Ensure that your environment variables are set correctly, especially your Discord bot token and Web3 HTTP provider URL.
 ```
-**Commands Overview**
+## Commands Overview
 
 
 **!hunt** - Go hunting and earn gold and XP.
@@ -108,19 +108,19 @@ Ensure that your environment variables are set correctly, especially your Discor
 **!tip <user> <amount>** - Tip another user in BNB.
 
 
-License
+## License
 
 This project is open-source and available under the MIT License.
 
-Contributions
+## Contributions
 
 Contributions are welcome! Please fork the repository and submit a pull request with your changes.
 
-Support
+## Support
 
 For issues or feature requests, please submit a ticket on the GitHub repository.
 
-Acknowledgments
+## Acknowledgments
 
 Thanks to the creators of discord.py and web3.py for their excellent libraries.
 Special thanks to the community for their support and contributions.
