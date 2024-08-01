@@ -1,0 +1,5 @@
+discord.py==2.3.2
+web3==6.4.0
+eth-account==0.7.0
+asyncio==3.4.3
+sqlite3
