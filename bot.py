@@ -41,11 +41,11 @@ conn.commit()
 w3 = Web3(Web3.HTTPProvider('https://bsc-dataseed.binance.org/'))
 
 # Define the ID of the game-data channel
-GAME_DATA_CHANNEL_ID = 000000000000000000  # Replace with your channel ID
+GAME_DATA_CHANNEL_ID = 1242647045433724928  # Replace with your channel ID
 
 # Shop setup
 SHOP_BNB_ADDRESS = ""
-ROLE_ID = 0000000000000000  # Replace with your actual role ID
+ROLE_ID = 00000000000000000  # Replace with your actual role ID
 ROLE_COST_GOLD = 5_000_000_000  # 5B Gold
 FISH_TO_GOLD_RATE = 25  # 1 fish = 25 gold
 WOOD_TO_GOLD_RATE = 50  # 1 wood = 50 gold
@@ -599,6 +599,10 @@ async def battle(ctx, opponent: discord.Member, challenger_troops: int, gold: in
                 self.opponent_id = opponent_id
                 self.challenger_troops = challenger_troops
                 self.gold = gold
+                self.initial_message = None  # Initialize the initial message as None
+
+            def set_initial_message(self, message):
+                self.initial_message = message
 
             @discord.ui.button(label="Select Troops", style=discord.ButtonStyle.primary)
             async def select_troops(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -606,7 +610,15 @@ async def battle(ctx, opponent: discord.Member, challenger_troops: int, gold: in
                     await interaction.response.send_message("This battle is not for you!", ephemeral=True)
                     return
 
-                await interaction.response.send_message(f"{self.opponent.mention}, enter the number of troops you want to send (max {self.max_troops}):", ephemeral=True)
+                # Create an embed asking how many troops to send
+                selection_embed = discord.Embed(
+                    title="⚔️ Troop Selection",
+                    description=f"{self.opponent.mention}, how many troops do you want to send to the battle?\n\n"
+                                f"**Available Troops:** {self.max_troops} 🪖",
+                    color=0x3498DB
+                )
+                selection_embed.set_footer(text="Please type the number of troops in the chat.")
+                await interaction.response.send_message(embed=selection_embed, ephemeral=True)
 
                 def check_response(m):
                     return m.author.id == self.opponent.id and m.channel == interaction.channel
@@ -615,31 +627,56 @@ async def battle(ctx, opponent: discord.Member, challenger_troops: int, gold: in
                     msg = await bot.wait_for('message', check=check_response, timeout=60)
                     opponent_troops = int(msg.content)
 
-                    # Debugging: Log the opponent's input
-                    logging.debug(f"Opponent {self.opponent.id} selected {opponent_troops} troops.")
-
-                    # Validation for troops
                     if opponent_troops > self.max_troops or opponent_troops <= 0:
-                        await interaction.followup.send(f"You can only send up to {self.max_troops} troops!", ephemeral=True)
+                        error_embed = discord.Embed(
+                            title="⚠️ Invalid Number",
+                            description=f"You can only send up to **{self.max_troops}** troops! Please try again.",
+                            color=0xE74C3C
+                        )
+                        await interaction.followup.send(embed=error_embed, ephemeral=True)
                         return
                     if opponent_data["gold"] < self.gold:
-                        await interaction.followup.send("You don't have enough gold to bet.", ephemeral=True)
+                        error_embed = discord.Embed(
+                            title="⚠️ Not Enough Gold",
+                            description="You don't have enough gold to match the bet. Please try again with a lower amount.",
+                            color=0xE74C3C
+                        )
+                        await interaction.followup.send(embed=error_embed, ephemeral=True)
                         return
+
+                    # Delete the initial battle challenge message
+                    if self.initial_message:
+                        await self.initial_message.delete()
 
                     # Proceed with the battle
                     await process_battle(interaction, self.challenger_id, self.opponent_id, self.challenger_troops, opponent_troops, self.gold)
                 except asyncio.TimeoutError:
-                    await interaction.followup.send("Battle request timed out.", ephemeral=True)
-                    logging.debug("Timeout occurred while waiting for opponent's response.")
+                    timeout_embed = discord.Embed(
+                        title="⏳ Timeout",
+                        description="You took too long to respond. The battle request has timed out.",
+                        color=0xE67E22
+                    )
+                    await interaction.followup.send(embed=timeout_embed, ephemeral=True)
                 except ValueError:
-                    await interaction.followup.send("Invalid number of troops entered.", ephemeral=True)
-                    logging.debug("Invalid number of troops entered by the opponent.")
+                    error_embed = discord.Embed(
+                        title="⚠️ Invalid Input",
+                        description="Please enter a valid number of troops.",
+                        color=0xE74C3C
+                    )
+                    await interaction.followup.send(embed=error_embed, ephemeral=True)
                 except Exception as e:
                     logging.error(f"An unexpected error occurred: {e}")
-                    await interaction.followup.send(f"An error occurred: {e}", ephemeral=True)
+                    error_embed = discord.Embed(
+                        title="❌ Error",
+                        description=f"An error occurred: {e}",
+                        color=0xE74C3C
+                    )
+                    await interaction.followup.send(embed=error_embed, ephemeral=True)
 
+        # Create the view and send the initial challenge message
         view = TroopSelectionView(opponent, opponent_data["troops"], challenger_id, opponent_id, challenger_troops, gold)
-        await ctx.send(embed=battle_embed, view=view)
+        initial_message = await ctx.send(embed=battle_embed, view=view)
+        view.set_initial_message(initial_message)  # Set the initial message in the view
     except Exception as e:
         logging.error(f"An error occurred in the battle command: {e}")
         await send_error_to_channel(ctx, str(e))
@@ -653,51 +690,93 @@ async def process_battle(interaction, challenger_id, opponent_id, challenger_tro
         challenger_member = await bot.fetch_user(challenger_id)
         opponent_member = await bot.fetch_user(opponent_id)
 
-        # Calculate win probabilities based on troop numbers
-        total_troops = challenger_troops + opponent_troops
-        challenger_win_prob = challenger_troops / total_troops
-        opponent_win_prob = opponent_troops / total_troops
+        previous_message = None  # Track the previous message to delete it
 
-        winner = random.choices([challenger_id, opponent_id], weights=[challenger_win_prob, opponent_win_prob], k=1)[0]
+        initial_challenger_troops = challenger_troops
+        initial_opponent_troops = opponent_troops
 
-        if winner == challenger_id:
-            result_embed = discord.Embed(
-                title="🏆 Battle Won!",
-                description=f"**{challenger_member.display_name} wins the battle against {opponent_member.display_name}!**\n\n"
-                            f"**{challenger_troops} troops** remain and **{gold} gold** gained!",
-                color=0x00FF00
+        # Simulate battle progress with periodic troop loss updates
+        for i in range(5):  # Changed from 3 to 5
+            # Calculate losses for this round
+            challenger_loss = random.randint(1, max(1, challenger_troops // 4))
+            opponent_loss = random.randint(1, max(1, opponent_troops // 4))
+            challenger_troops -= challenger_loss
+            opponent_troops -= opponent_loss
+
+            # Send update to the channel
+            progress_embed = discord.Embed(
+                title=f"⚔️ Battle Progress: Round {i + 1}",
+                description=f"{challenger_member.display_name} vs {opponent_member.display_name}\n"
+                            f"**{challenger_loss}** challenger troops lost | **{opponent_loss}** opponent troops lost\n"
+                            f"**Remaining Troops:**\n"
+                            f"{challenger_member.display_name}: {challenger_troops} 🪖\n"
+                            f"{opponent_member.display_name}: {opponent_troops} 🪖",
+                color=0xFFA500
             )
-            challenger_data["wins"] += 1
-            challenger_data["win_streak"] += 1
-            challenger_data["gold"] += gold
 
-            opponent_data["losses"] += 1
-            opponent_data["win_streak"] = 0
-            opponent_data["gold"] -= gold
-            opponent_data["troops"] -= opponent_troops
+            if previous_message:
+                await previous_message.delete()
+
+            previous_message = await interaction.followup.send(embed=progress_embed)
+
+            # Pause before the next round
+            await asyncio.sleep(2)
+
+        if previous_message:
+            await previous_message.delete()
+
+        # Calculate the final winner based on remaining troops
+        if challenger_troops > opponent_troops:
+            winner_id = challenger_id
+            loser_id = opponent_id
+            winner_troops = challenger_troops
+            loser_troops_lost = initial_opponent_troops - opponent_troops
         else:
-            result_embed = discord.Embed(
-                title="🏆 Battle Won!",
-                description=f"**{opponent_member.display_name} wins the battle against {challenger_member.display_name}!**\n\n"
-                            f"**{opponent_troops} troops** remain and **{gold} gold** gained!",
-                color=0x00FF00
-            )
-            opponent_data["wins"] += 1
-            opponent_data["win_streak"] += 1
-            opponent_data["gold"] += gold
+            winner_id = opponent_id
+            loser_id = challenger_id
+            winner_troops = opponent_troops
+            loser_troops_lost = initial_challenger_troops - challenger_troops
 
-            challenger_data["losses"] += 1
-            challenger_data["win_streak"] = 0
-            challenger_data["gold"] -= gold
-            challenger_data["troops"] -= challenger_troops
+        winner_member = await bot.fetch_user(winner_id)
+        loser_member = await bot.fetch_user(loser_id)
 
-        update_user_data(challenger_id, challenger_data)
-        update_user_data(opponent_id, opponent_data)
-    
+        # Update winner's and loser's data
+        winner_data = get_user_data(winner_id)
+        loser_data = get_user_data(loser_id)
+
+        # Update the winner's troops to reflect only the surviving troops
+        if winner_id == challenger_id:
+            winner_data["troops"] = (winner_data["troops"] - initial_challenger_troops) + winner_troops
+        else:
+            winner_data["troops"] = (winner_data["troops"] - initial_opponent_troops) + winner_troops
+
+        # Deduct the number of troops that died from the loser's total troop count
+        loser_data["troops"] = max(0, loser_data["troops"] - loser_troops_lost)
+
+        winner_data["wins"] += 1
+        winner_data["win_streak"] += 1
+        winner_data["gold"] += gold
+
+        loser_data["losses"] += 1
+        loser_data["win_streak"] = 0
+        loser_data["gold"] -= gold
+
+        update_user_data(winner_id, winner_data)
+        update_user_data(loser_id, loser_data)
+
+        # Announce the final result
+        result_embed = discord.Embed(
+            title="🏆 Final Battle Result",
+            description=f"**{winner_member.display_name}** wins the battle against **{loser_member.display_name}**!\n\n"
+                        f"**{winner_troops} troops** remain and **{gold} gold** gained!",
+            color=0x00FF00
+        )
         await interaction.followup.send(embed=result_embed)
     except Exception as e:
         logging.error(f"An error occurred during battle processing: {e}")
         await interaction.followup.send(f"An error occurred during battle processing: {e}", ephemeral=True)
+
+
 
 @bot.command(name="commands")
 async def commands(ctx):
@@ -1083,13 +1162,15 @@ async def fee(ctx):
         await send_error_to_channel(ctx, str(e))
 
 class ConfirmTipView(View):
-    def __init__(self, user_id, member, amount, fee_bnb):
+    def __init__(self, user_id, member, amount, fee_bnb, token):
         super().__init__(timeout=60)
         self.user_id = user_id
         self.member = member
         self.amount = amount
         self.fee_bnb = fee_bnb
+        self.token = token  # Store the token if needed
         self.confirmed = False
+
 
     @discord.ui.button(label="Confirm", style=discord.ButtonStyle.green)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1453,7 +1534,7 @@ async def handle_auto_mine(ctx_or_interaction):
         await send_error_to_channel(ctx_or_interaction, str(e))
 
 # Define the role ID and cost
-ROLE_ID = 1268146044408172646  # Replace with your actual role ID
+ROLE_ID = 0000000000000000  # Replace with your actual role ID
 
 @bot.command(name="highroller")
 async def highroller(ctx):
@@ -1542,6 +1623,313 @@ async def prune_error(ctx, error):
     else:
         await ctx.send(f"An error occurred: {error}")
 
+class LeaderboardView(View):
+    def __init__(self):
+        super().__init__(timeout=120)  # Timeout after 2 minutes of inactivity
+        self.current_page = 0
+
+    async def update_embed(self, interaction: discord.Interaction):
+        if self.current_page == 0:
+            embed = await self.get_top_bnb_users()
+        elif self.current_page == 1:
+            embed = await self.get_top_win_loss_users()
+        elif self.current_page == 2:
+            embed = await self.get_top_troops_users()
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="BNB", style=discord.ButtonStyle.success)  # Changed to green
+    async def bnb_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page = 0
+        await self.update_embed(interaction)
+
+    @discord.ui.button(label="Win/Loss", style=discord.ButtonStyle.success)  # Changed to green
+    async def win_loss_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page = 1
+        await self.update_embed(interaction)
+
+    @discord.ui.button(label="Troops", style=discord.ButtonStyle.success)  # Changed to green
+    async def troops_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page = 2
+        await self.update_embed(interaction)
+
+    async def get_top_bnb_users(self):
+        c.execute('''
+            SELECT user_id, bnb_balance FROM users ORDER BY bnb_balance DESC LIMIT 3
+        ''')
+        top_users = c.fetchall()
+
+        embed = discord.Embed(
+            title="🏆 Top 3 BNB Balances",
+            description="Here are the users with the highest BNB balances!",
+            color=0xFFD700
+        )
+
+        medals = ["🥇", "🥈", "🥉"]
+        for i, (user_id, bnb_balance) in enumerate(top_users):
+            user = await bot.fetch_user(user_id)
+            embed.add_field(
+                name=f"{medals[i]} {user.display_name}",
+                value=f"**Balance:** {bnb_balance:.8f} BNB",
+                inline=False
+            )
+
+        embed.set_footer(text="Keep earning BNB to climb the leaderboard!")
+        return embed
+
+    async def get_top_win_loss_users(self):
+        c.execute('''
+            SELECT user_id, wins, losses, 
+            CASE 
+                WHEN losses = 0 THEN wins * 1.0  -- If losses are zero, just use the wins as the ratio
+                ELSE (wins * 1.0) / losses      -- Multiply wins by 1.0 to ensure floating-point division
+            END AS ratio
+            FROM users 
+            ORDER BY ratio DESC 
+            LIMIT 10
+        ''')
+        top_users = c.fetchall()
+
+        embed = discord.Embed(
+            title="🏆 Top 10 Win/Loss Ratios",
+            description="Here are the users with the highest win/loss ratios!",
+            color=0x00FF00
+        )
+
+        for i, (user_id, wins, losses, ratio) in enumerate(top_users, start=1):
+            user = await bot.fetch_user(user_id)
+            embed.add_field(
+                name=f"{i}. {user.display_name}",
+                value=f"**Wins:** {wins}, **Losses:** {losses}, **Ratio:** {ratio:.2f}",
+                inline=False
+            )
+
+        embed.set_footer(text="Battle to improve your win/loss ratio!")
+        return embed
+
+    async def get_top_troops_users(self):
+        c.execute('''
+            SELECT user_id, troops FROM users ORDER BY troops DESC LIMIT 5
+        ''')
+        top_users = c.fetchall()
+
+        embed = discord.Embed(
+            title="🏅 Top 5 Troops",
+            description="Here are the users with the most troops!",
+            color=0x1E90FF
+        )
+
+        for i, (user_id, troops) in enumerate(top_users, start=1):
+            user = await bot.fetch_user(user_id)
+            embed.add_field(
+                name=f"{i}. {user.display_name}",
+                value=f"**Troops:** {troops}",
+                inline=False
+            )
+
+        embed.set_footer(text="Recruit more troops to rise in the ranks!")
+        return embed
+
+
+@bot.command(name="lb")
+async def leaderboard(ctx):
+    try:
+        # Delete the user's command message immediately
+        await ctx.message.delete()
+
+        view = LeaderboardView()
+        initial_embed = await view.get_top_bnb_users()  # Start with the first page
+
+        # Send the leaderboard message
+        message = await ctx.send(embed=initial_embed, view=view)
+
+        # Auto-delete the leaderboard message after 60 seconds
+        await message.delete(delay=60)
+
+    except Exception as e:
+        await send_error_to_channel(ctx, str(e))
+
+
+# Predefined list of trivia questions grouped by category
+TRIVIA_QUESTIONS = {
+    "General Knowledge": [
+        {
+            "question": "What is the capital of France?",
+            "options": ["Paris", "London", "Berlin", "Rome"],
+            "correct_answer": "Paris"
+        },
+        {
+            "question": "Which planet is known as the Red Planet?",
+            "options": ["Mars", "Earth", "Jupiter", "Venus"],
+            "correct_answer": "Mars"
+        },
+        {
+         "question": "Who Was Known as The King of Pop?",
+            "options": ["Michael Jackson", "Justin Timberlake", "Prince", "Harry Styles"],
+            "correct_answer": "Michael Jackson"   
+        },
+        # Add more General Knowledge questions here
+    ],
+    "Science": [
+        {
+            "question": "What is the chemical symbol for water?",
+            "options": ["H2O", "O2", "CO2", "N2"],
+            "correct_answer": "H2O"
+        },
+        {
+            "question": "Which planet is closest to the Sun?",
+            "options": ["Mercury", "Venus", "Earth", "Mars"],
+            "correct_answer": "Mercury"
+        },
+        {
+            "question": "How Far Is Earth From Mars?",
+            "options": ["500M Miles", "14M Miles", "140M Miles", "1400M Miles"],
+            "correct_answer": "140M Miles"
+        },
+        # Add more Science questions here
+    ],
+    "History": [
+        {
+            "question": "Who was the first President of the United States?",
+            "options": ["George Washington", "Thomas Jefferson", "Abraham Lincoln", "John Adams"],
+            "correct_answer": "George Washington"
+        },
+        {
+            "question": "What year did World War II end?",
+            "options": ["1945", "1939", "1941", "1950"],
+            "correct_answer": "1945"
+        },
+        {
+            "question": "How Many Years Did The 100 Year War Last?",
+            "options": ["121", "100", "116", "153"],
+            "correct_answer": "116"
+        },
+        # Add more History questions here
+    ],
+    # Add more categories and questions here
+}
+
+# Fetch a random trivia question from the selected category
+def get_random_trivia_question(category):
+    question_data = random.choice(TRIVIA_QUESTIONS[category])
+    return question_data['question'], question_data['correct_answer'], question_data['options']
+
+@bot.command(name="trivia")
+async def trivia(ctx):
+    try:
+        # Ask the user to select a category
+        categories = list(TRIVIA_QUESTIONS.keys())
+        category_options = "\n".join([f"{i+1}. {category}" for i, category in enumerate(categories)])
+        
+        embed = discord.Embed(
+            title="🎲 Trivia Categories",
+            description=f"Please select a category by typing the number:\n\n{category_options}",
+            color=0x00ff00
+        )
+        category_message = await ctx.send(embed=embed)
+
+        def check(m):
+            return m.author == ctx.author and m.channel == ctx.channel and m.content.isdigit() and 1 <= int(m.content) <= len(categories)
+
+        try:
+            # Wait for the user to select a category
+            category_response = await bot.wait_for('message', check=check, timeout=15.0)
+            category_index = int(category_response.content) - 1
+            selected_category = categories[category_index]
+
+            # Delete the user's command message and category response
+            await ctx.message.delete()
+            await category_message.delete()
+            await category_response.delete()
+
+            # Get a random trivia question from the selected category
+            question, correct_answer, all_answers = get_random_trivia_question(selected_category)
+
+            # Embed the trivia question
+            embed = discord.Embed(
+                title=f"❓ Trivia Time! ({selected_category})",
+                description=f"**{question}**\n\n",
+                color=0x00ff00
+            )
+            for i, answer in enumerate(all_answers, start=1):
+                embed.add_field(name=f"Option {i}", value=answer, inline=False)
+            embed.set_footer(text="You have 15 seconds to answer!")
+
+            trivia_message = await ctx.send(embed=embed)
+
+            def check_answer(m):
+                return m.author == ctx.author and m.channel == ctx.channel
+
+            try:
+                # Wait for the user's answer
+                answer_message = await bot.wait_for('message', check=check_answer, timeout=15.0)
+                data = get_user_data(ctx.author.id)
+
+                # Delete the trivia question and user's answer
+                await trivia_message.delete()
+                await answer_message.delete()
+
+                if answer_message.content.lower() == correct_answer.lower():
+                    gold_reward = random.randint(100, 500)  # Random gold reward between 100 and 500
+                    data["gold"] += gold_reward
+                    data["wins"] += 1  # Increment wins for correct answer
+                    data["win_streak"] += 1  # Increment win streak for correct answer
+                    update_user_data(ctx.author.id, data)
+                    
+                    # Correct Answer Embed
+                    correct_embed = discord.Embed(
+                        title="🎉 Correct Answer!",
+                        description=f"{ctx.author.mention}, you got it right! 🥳\n\nYou earned **{gold_reward}** gold! 💰",
+                        color=0x00ff00
+                    )
+                    correct_embed.add_field(
+                        name="🏆 Your Reward",
+                        value=f"**{gold_reward}** gold has been added to your account!\n",
+                        inline=False
+                    )
+                    correct_embed.set_thumbnail(url="https://example.com/correct.png")  # Replace with an appropriate image URL
+                    await ctx.send(embed=correct_embed, delete_after=20)  # Auto-delete after 20 seconds
+                else:
+                    data["losses"] += 1  # Increment losses for incorrect answer
+                    data["win_streak"] = 0  # Reset win streak on incorrect answer
+                    update_user_data(ctx.author.id, data)
+
+                    # Incorrect Answer Embed
+                    incorrect_embed = discord.Embed(
+                        title="❌ Incorrect Answer",
+                        description=f"Sorry {ctx.author.mention}, that's not the right answer. 😢\n\nThe correct answer was: **{correct_answer}**.",
+                        color=0xff0000
+                    )
+                    incorrect_embed.add_field(
+                        name="Better Luck Next Time!",
+                        value="Don't worry, you can try again with the next question! 💪",
+                        inline=False
+                    )
+                    incorrect_embed.set_thumbnail(url="https://example.com/wrong.png")  # Replace with an appropriate image URL
+                    await ctx.send(embed=incorrect_embed, delete_after=20)  # Auto-delete after 20 seconds
+            except asyncio.TimeoutError:
+                # Delete the trivia question if the user runs out of time
+                await trivia_message.delete()
+
+                # Timeout Embed
+                timeout_embed = discord.Embed(
+                    title="⏰ Time's Up!",
+                    description=f"Time ran out, {ctx.author.mention}! ⌛\n\nThe correct answer was: **{correct_answer}**.",
+                    color=0xffa500
+                )
+                timeout_embed.add_field(
+                    name="Try Again Soon!",
+                    value="Make sure to answer quickly next time! ⏳",
+                    inline=False
+                )
+                timeout_embed.set_thumbnail(url="https://example.com/timeout.png")  # Replace with an appropriate image URL
+                await ctx.send(embed=timeout_embed, delete_after=20)  # Auto-delete after 20 seconds
+
+        except asyncio.TimeoutError:
+            await category_message.delete()
+            await ctx.send(f"⏰ You took too long to select a category. Please try again, {ctx.author.mention}.", delete_after=20)
+
+    except Exception as e:
+        await send_error_to_channel(ctx, str(e))
 
 
 # Start the bot
