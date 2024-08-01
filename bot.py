@@ -41,7 +41,8 @@ conn.commit()
 w3 = Web3(Web3.HTTPProvider('https://bsc-dataseed.binance.org/'))
 
 # Define the ID of the game-data channel
-GAME_DATA_CHANNEL_ID = 1242647045433724928  # Replace with your channel ID
+GAME_DATA_CHANNEL_ID = 0000000000000  
+# Replace with your channel ID
 
 # Shop setup
 SHOP_BNB_ADDRESS = ""
