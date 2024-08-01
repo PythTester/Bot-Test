@@ -41,12 +41,11 @@ conn.commit()
 w3 = Web3(Web3.HTTPProvider('https://bsc-dataseed.binance.org/'))
 
 # Define the ID of the game-data channel
-GAME_DATA_CHANNEL_ID = 0000000000000  
-# Replace with your channel ID
+GAME_DATA_CHANNEL_ID = 000000000000000000  # Replace with your channel ID
 
 # Shop setup
-SHOP_BNB_ADDRESS = ""
-ROLE_ID = 00000000000000000  # Replace with your actual role ID
+SHOP_BNB_ADDRESS = "000000000000000000" # Replace with Bot BNB Addr
+ROLE_ID = 000000000000000000  # Replace with your actual role ID
 ROLE_COST_GOLD = 5_000_000_000  # 5B Gold
 FISH_TO_GOLD_RATE = 25  # 1 fish = 25 gold
 WOOD_TO_GOLD_RATE = 50  # 1 wood = 50 gold
@@ -998,9 +997,13 @@ async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
         fee_wei = gas_price * gas_limit
         fee_bnb = float(w3.from_wei(fee_wei, 'ether'))
 
+        # Calculate the 0.5% withdrawal fee
+        transaction_fee_bnb = amount * 0.005
+        total_fee_bnb = fee_bnb + transaction_fee_bnb
+
         # Check if the user has enough balance
-        if token == 'BNB' and data["bnb_balance"] < (amount + fee_bnb):
-            await ctx.send(f"You don't have enough BNB to withdraw {amount} BNB. You need at least {amount + fee_bnb} BNB to cover the withdrawal and fee.")
+        if token == 'BNB' and data["bnb_balance"] < (amount + total_fee_bnb):
+            await ctx.send(f"You don't have enough BNB to withdraw {amount} BNB. You need at least {amount + total_fee_bnb} BNB to cover the withdrawal and fee.")
             await delete_user_command(ctx)
             return
         elif token != 'BNB':
@@ -1013,24 +1016,40 @@ async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
                 await delete_user_command(ctx)
                 return
 
+            # Ensure enough BNB for the transaction fee
+            if data["bnb_balance"] < total_fee_bnb:
+                await ctx.send(f"You don't have enough BNB to cover the transaction fee of {total_fee_bnb:.8f} BNB.")
+                await delete_user_command(ctx)
+                return
+
+        def format_decimal(value):
+            # Format the value to remove unnecessary trailing zeros
+            return f"{value:.8f}".rstrip('0').rstrip('.')
+
         # Ask for confirmation
         embed = discord.Embed(
             title="📤 Confirm Withdrawal",
-            description=f"Are you sure you want to withdraw **{amount} {token}** to `{address}`?\n\n"
-                        f"**Gas Fee:** {fee_bnb:.8f} BNB",
+            description=f"Are you sure you want to withdraw **{format_decimal(amount)} {token}** to `{address}`?\n\n"
+                        f"**Network Gas Fee:** {format_decimal(fee_bnb)} BNB\n"
+                        f"**Transaction Fee (0.5%):** {format_decimal(transaction_fee_bnb)} BNB\n"
+                        f"**Total Fee:** {format_decimal(total_fee_bnb)} BNB",
             color=0x00ff00
         )
-        view = ConfirmWithdrawView(user_id, amount, address, token, fee_bnb)
-        await ctx.send(embed=embed, view=view)
+        view = ConfirmWithdrawView(user_id, amount, address, token, total_fee_bnb)
+        confirmation_message = await ctx.send(embed=embed, view=view)
 
         # Wait for the user's response
         await view.wait()
 
-        if view.confirmed:
-            # Proceed with the withdrawal if confirmed
-            if token == 'BNB':
-                data["bnb_balance"] -= (amount + fee_bnb)
+        # After confirming or declining, delete the confirmation message
+        await confirmation_message.delete()
 
+        if view.confirmed:
+            if token == 'BNB':
+                # Deduct the total fee from the user's balance
+                data["bnb_balance"] -= (amount + total_fee_bnb)
+
+                # Prepare the transaction to send BNB to the recipient
                 tx = {
                     'nonce': w3.eth.get_transaction_count(data["bnb_address"]),
                     'to': address,
@@ -1040,7 +1059,20 @@ async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
                 }
                 signed_tx = w3.eth.account.sign_transaction(tx, data["bnb_private_key"])
                 tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+
+                # Send the 0.5% fee to the shop's BNB address
+                fee_tx = {
+                    'nonce': w3.eth.get_transaction_count(data["bnb_address"]) + 1,  # Increment nonce for the next transaction
+                    'to': SHOP_BNB_ADDRESS,
+                    'value': w3.to_wei(transaction_fee_bnb, 'ether'),
+                    'gas': gas_limit,
+                    'gasPrice': gas_price,
+                }
+                signed_fee_tx = w3.eth.account.sign_transaction(fee_tx, data["bnb_private_key"])
+                fee_tx_hash = w3.eth.send_raw_transaction(signed_fee_tx.rawTransaction)
+
             else:
+                # Proceed with the token transfer
                 token_contract_address = TOKEN_CONTRACTS[token]
                 token_contract = w3.eth.contract(address=Web3.to_checksum_address(token_contract_address), abi=ERC20_ABI)
 
@@ -1053,8 +1085,16 @@ async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
                 signed_tx = w3.eth.account.sign_transaction(tx, data["bnb_private_key"])
                 tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
 
-                # Update the token balance in the database if necessary
-                update_token_balance(user_id, token, -amount)
+                # Send the 0.5% fee to the shop's BNB address
+                fee_tx = {
+                    'nonce': w3.eth.get_transaction_count(data["bnb_address"]) + 1,  # Increment nonce for the next transaction
+                    'to': SHOP_BNB_ADDRESS,
+                    'value': w3.to_wei(transaction_fee_bnb, 'ether'),
+                    'gas': gas_limit,
+                    'gasPrice': gas_price,
+                }
+                signed_fee_tx = w3.eth.account.sign_transaction(fee_tx, data["bnb_private_key"])
+                fee_tx_hash = w3.eth.send_raw_transaction(signed_fee_tx.rawTransaction)
 
             # Update the user's balance in the database
             if token == 'BNB':
@@ -1062,7 +1102,8 @@ async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
 
             embed = discord.Embed(
                 title="📤 Withdrawal Successful",
-                description=f"Transaction hash: [{tx_hash.hex()}](https://bscscan.com/tx/{tx_hash.hex()})",
+                description=f"Transaction hash: [{tx_hash.hex()}](https://bscscan.com/tx/{tx_hash.hex()})\n"
+                            f"Fee transaction hash: [{fee_tx_hash.hex()}](https://bscscan.com/tx/{fee_tx_hash.hex()})",
                 color=0x00ff00
             )
             await ctx.send(embed=embed)
@@ -1071,6 +1112,8 @@ async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
 
     except Exception as e:
         await send_error_to_channel(ctx, str(e))
+
+
 
 
 
@@ -1090,14 +1133,14 @@ async def bals(ctx):
 
         # Contract addresses for the tokens
         token_contracts = {
-            "CAKE": "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82",
-            "BUSD": "0xe9e7cea3dedca5984780bafc599bd69add087d56",
-            "USDT": "0x55d398326f99059ff775485246999027b3197955",
-            "ETH": "0x2170ed0880ac9a755fd29b2688956bd959f933f8",
-            "DOT": "0x7083609fce4d1d8dc0c979aab8c869ea2c873402",
-            "ADA": "0x3EE2200Efb3400fAbB9AacF31297cBdD1d435D47",
-            "LINK": "0xf8a0bf9cf54bb92f17374d9e9a321e6a111a51bd",
-            "UNI": "0xbf5140a22578168fd562dccf235e5d43a02ce9b1"
+            "CAKE": "000000000000000000000000000000000000000000", # Replace With Token Addr
+            "BUSD": "000000000000000000000000000000000000000000", # Replace With Token Addr
+            "USDT": "000000000000000000000000000000000000000000", # Replace With Token Addr
+            "ETH": "000000000000000000000000000000000000000000", # Replace With Token Addr
+            "DOT": "000000000000000000000000000000000000000000", # Replace With Token Addr
+            "ADA": "000000000000000000000000000000000000000000", # Replace With Token Addr
+            "LINK": "000000000000000000000000000000000000000000", # Replace With Token Addr
+            "UNI": "000000000000000000000000000000000000000000" # Replace With Token Addr
         }
 
         # ABI for the token contracts
@@ -1110,6 +1153,10 @@ async def bals(ctx):
                 "type": "function"
             }
         ]
+
+        def format_decimal(value):
+            # Format the value to remove unnecessary trailing zeros
+            return f"{value:.8f}".rstrip('0').rstrip('.')
 
         # Get balances for each token
         token_balances = {}
@@ -1132,9 +1179,9 @@ async def bals(ctx):
             description="Here are your balances for BNB and supported BEP-20 tokens:",
             color=0x00ff00
         )
-        embed.add_field(name="BNB Balance", value=f"**{bnb_balance:.8f} BNB**", inline=False)
+        embed.add_field(name="BNB Balance", value=f"**{format_decimal(bnb_balance)} BNB**", inline=False)
         for token_name, balance in token_balances.items():
-            embed.add_field(name=f"{token_name} Balance", value=f"**{balance:.8f} {token_name}**", inline=False)
+            embed.add_field(name=f"{token_name} Balance", value=f"**{format_decimal(balance)} {token_name}**", inline=False)
 
         await ctx.send(embed=embed)
         await delete_user_command(ctx)
@@ -1145,22 +1192,44 @@ async def bals(ctx):
 
 
 @bot.command(name="fee")
-async def fee(ctx):
+async def fee(ctx, amount: float = None):
     try:
         gas_price = w3.eth.gas_price  # Get the current gas price
         gas_limit = 21000  # Standard gas limit for a simple BNB transfer
         fee_wei = gas_price * gas_limit
         fee_bnb = float(w3.from_wei(fee_wei, 'ether'))
-        
+
+        def format_decimal(value):
+            # Format the value to remove unnecessary trailing zeros
+            return f"{value:.8f}".rstrip('0').rstrip('.')
+
+        # If an amount is provided, calculate the 0.5% transaction fee
+        if amount is not None:
+            transaction_fee_bnb = amount * 0.005
+            total_fee_bnb = fee_bnb + transaction_fee_bnb
+            description = (
+                f"To withdraw **{format_decimal(amount)} BNB**, the estimated fees are:\n\n"
+                f"**Network Gas Fee:** {format_decimal(fee_bnb)} BNB\n"
+                f"**Transaction Fee (0.5%):** {format_decimal(transaction_fee_bnb)} BNB\n"
+                f"**Total Fee:** {format_decimal(total_fee_bnb)} BNB"
+            )
+        else:
+            description = (
+                f"The current estimated fee for a standard BNB transaction is:\n\n"
+                f"**Network Gas Fee:** {format_decimal(fee_bnb)} BNB"
+            )
+
         embed = discord.Embed(
-            title="💸 BNB Transaction Fee",
-            description=f"The current estimated fee for a standard BNB transaction is: **{fee_bnb:.8f} BNB**",
+            title="💸 Withdrawal Fee Estimate",
+            description=description,
             color=0x00ff00
         )
         await ctx.send(embed=embed)
         await delete_user_command(ctx)
     except Exception as e:
         await send_error_to_channel(ctx, str(e))
+
+
 
 class ConfirmTipView(View):
     def __init__(self, user_id, member, amount, fee_bnb, token):
@@ -1535,7 +1604,7 @@ async def handle_auto_mine(ctx_or_interaction):
         await send_error_to_channel(ctx_or_interaction, str(e))
 
 # Define the role ID and cost
-ROLE_ID = 0000000000000000  # Replace with your actual role ID
+ROLE_ID = 000000000000000000  # Replace with your actual role ID
 
 @bot.command(name="highroller")
 async def highroller(ctx):
@@ -1624,118 +1693,121 @@ async def prune_error(ctx, error):
     else:
         await ctx.send(f"An error occurred: {error}")
 
-class LeaderboardView(View):
-    def __init__(self):
-        super().__init__(timeout=120)  # Timeout after 2 minutes of inactivity
-        self.current_page = 0
-
-    async def update_embed(self, interaction: discord.Interaction):
-        if self.current_page == 0:
-            embed = await self.get_top_bnb_users()
-        elif self.current_page == 1:
-            embed = await self.get_top_win_loss_users()
-        elif self.current_page == 2:
-            embed = await self.get_top_troops_users()
-        await interaction.response.edit_message(embed=embed, view=self)
-
-    @discord.ui.button(label="BNB", style=discord.ButtonStyle.success)  # Changed to green
-    async def bnb_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_page = 0
-        await self.update_embed(interaction)
-
-    @discord.ui.button(label="Win/Loss", style=discord.ButtonStyle.success)  # Changed to green
-    async def win_loss_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_page = 1
-        await self.update_embed(interaction)
-
-    @discord.ui.button(label="Troops", style=discord.ButtonStyle.success)  # Changed to green
-    async def troops_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_page = 2
-        await self.update_embed(interaction)
-
-    async def get_top_bnb_users(self):
-        c.execute('''
-            SELECT user_id, bnb_balance FROM users ORDER BY bnb_balance DESC LIMIT 3
-        ''')
-        top_users = c.fetchall()
-
-        embed = discord.Embed(
-            title="🏆 Top 3 BNB Balances",
-            description="Here are the users with the highest BNB balances!",
-            color=0xFFD700
-        )
-
-        medals = ["🥇", "🥈", "🥉"]
-        for i, (user_id, bnb_balance) in enumerate(top_users):
-            user = await bot.fetch_user(user_id)
-            embed.add_field(
-                name=f"{medals[i]} {user.display_name}",
-                value=f"**Balance:** {bnb_balance:.8f} BNB",
-                inline=False
-            )
-
-        embed.set_footer(text="Keep earning BNB to climb the leaderboard!")
-        return embed
-
-    async def get_top_win_loss_users(self):
-        c.execute('''
-            SELECT user_id, wins, losses, 
-            CASE 
-                WHEN losses = 0 THEN wins * 1.0  -- If losses are zero, just use the wins as the ratio
-                ELSE (wins * 1.0) / losses      -- Multiply wins by 1.0 to ensure floating-point division
-            END AS ratio
-            FROM users 
-            ORDER BY ratio DESC 
-            LIMIT 10
-        ''')
-        top_users = c.fetchall()
-
-        embed = discord.Embed(
-            title="🏆 Top 10 Win/Loss Ratios",
-            description="Here are the users with the highest win/loss ratios!",
-            color=0x00FF00
-        )
-
-        for i, (user_id, wins, losses, ratio) in enumerate(top_users, start=1):
-            user = await bot.fetch_user(user_id)
-            embed.add_field(
-                name=f"{i}. {user.display_name}",
-                value=f"**Wins:** {wins}, **Losses:** {losses}, **Ratio:** {ratio:.2f}",
-                inline=False
-            )
-
-        embed.set_footer(text="Battle to improve your win/loss ratio!")
-        return embed
-
-    async def get_top_troops_users(self):
-        c.execute('''
-            SELECT user_id, troops FROM users ORDER BY troops DESC LIMIT 5
-        ''')
-        top_users = c.fetchall()
-
-        embed = discord.Embed(
-            title="🏅 Top 5 Troops",
-            description="Here are the users with the most troops!",
-            color=0x1E90FF
-        )
-
-        for i, (user_id, troops) in enumerate(top_users, start=1):
-            user = await bot.fetch_user(user_id)
-            embed.add_field(
-                name=f"{i}. {user.display_name}",
-                value=f"**Troops:** {troops}",
-                inline=False
-            )
-
-        embed.set_footer(text="Recruit more troops to rise in the ranks!")
-        return embed
-
-
 @bot.command(name="lb")
 async def leaderboard(ctx):
     try:
         # Delete the user's command message immediately
         await ctx.message.delete()
+
+        def format_decimal(value, decimals=8):
+            # Format the value to remove unnecessary trailing zeros
+            return f"{value:.{decimals}f}".rstrip('0').rstrip('.')
+
+        class LeaderboardView(View):
+            def __init__(self):
+                super().__init__(timeout=120)  # Timeout after 2 minutes of inactivity
+                self.current_page = 0
+
+            async def update_embed(self, interaction: discord.Interaction):
+                if self.current_page == 0:
+                    embed = await self.get_top_bnb_users()
+                elif self.current_page == 1:
+                    embed = await self.get_top_win_loss_users()
+                elif self.current_page == 2:
+                    embed = await self.get_top_troops_users()
+                await interaction.response.edit_message(embed=embed, view=self)
+
+            @discord.ui.button(label="BNB", style=discord.ButtonStyle.success)  # Changed to green
+            async def bnb_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                self.current_page = 0
+                await self.update_embed(interaction)
+
+            @discord.ui.button(label="Win/Loss", style=discord.ButtonStyle.success)  # Changed to green
+            async def win_loss_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                self.current_page = 1
+                await self.update_embed(interaction)
+
+            @discord.ui.button(label="Troops", style=discord.ButtonStyle.success)  # Changed to green
+            async def troops_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                self.current_page = 2
+                await self.update_embed(interaction)
+
+            async def get_top_bnb_users(self):
+                c.execute('''
+                    SELECT user_id, bnb_balance FROM users ORDER BY bnb_balance DESC LIMIT 3
+                ''')
+                top_users = c.fetchall()
+
+                embed = discord.Embed(
+                    title="🏆 Top 3 BNB Balances",
+                    description="Here are the users with the highest BNB balances!",
+                    color=0xFFD700
+                )
+
+                medals = ["🥇", "🥈", "🥉"]
+                for i, (user_id, bnb_balance) in enumerate(top_users):
+                    user = await bot.fetch_user(user_id)
+                    embed.add_field(
+                        name=f"{medals[i]} {user.display_name}",
+                        value=f"**Balance:** {format_decimal(bnb_balance)} BNB",
+                        inline=False
+                    )
+
+                embed.set_footer(text="Keep earning BNB to climb the leaderboard!")
+                return embed
+
+            async def get_top_win_loss_users(self):
+                c.execute('''
+                    SELECT user_id, wins, losses, 
+                    CASE 
+                        WHEN losses = 0 THEN wins * 1.0  -- If losses are zero, just use the wins as the ratio
+                        ELSE (wins * 1.0) / losses      -- Multiply wins by 1.0 to ensure floating-point division
+                    END AS ratio
+                    FROM users 
+                    ORDER BY ratio DESC 
+                    LIMIT 10
+                ''')
+                top_users = c.fetchall()
+
+                embed = discord.Embed(
+                    title="🏆 Top 10 Win/Loss Ratios",
+                    description="Here are the users with the highest win/loss ratios!",
+                    color=0x00FF00
+                )
+
+                for i, (user_id, wins, losses, ratio) in enumerate(top_users, start=1):
+                    user = await bot.fetch_user(user_id)
+                    embed.add_field(
+                        name=f"{i}. {user.display_name}",
+                        value=f"**Wins:** {wins}, **Losses:** {losses}, **Ratio:** {format_decimal(ratio, decimals=2)}",
+                        inline=False
+                    )
+
+                embed.set_footer(text="Battle to improve your win/loss ratio!")
+                return embed
+
+            async def get_top_troops_users(self):
+                c.execute('''
+                    SELECT user_id, troops FROM users ORDER BY troops DESC LIMIT 5
+                ''')
+                top_users = c.fetchall()
+
+                embed = discord.Embed(
+                    title="🏅 Top 5 Troops",
+                    description="Here are the users with the most troops!",
+                    color=0x1E90FF
+                )
+
+                for i, (user_id, troops) in enumerate(top_users, start=1):
+                    user = await bot.fetch_user(user_id)
+                    embed.add_field(
+                        name=f"{i}. {user.display_name}",
+                        value=f"**Troops:** {troops}",
+                        inline=False
+                    )
+
+                embed.set_footer(text="Recruit more troops to rise in the ranks!")
+                return embed
 
         view = LeaderboardView()
         initial_embed = await view.get_top_bnb_users()  # Start with the first page
@@ -1748,6 +1820,8 @@ async def leaderboard(ctx):
 
     except Exception as e:
         await send_error_to_channel(ctx, str(e))
+
+
 
 
 # Predefined list of trivia questions grouped by category
