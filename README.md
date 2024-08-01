@@ -1,4 +1,4 @@
-## BNBOT README
+## Discord RPG Bot with Web3 Integration
 
 ## Overview
 
@@ -6,107 +6,135 @@ This project is a comprehensive and dynamic Discord bot built using the discord.
 
 ## Features
 
-**1. User Profiles and Economy**
+**RPG Activities:** Users can engage in hunting, fishing, chopping wood, and mining to earn in-game resources and experience points.
 
-User Data Management: Each user has a profile with statistics like level, experience points (XP), gold, and resources (fish, wood, ore).
-Leveling System: Users gain XP through various activities, leveling up when enough XP is earned.
-Virtual Economy: Users can earn and spend gold through activities such as hunting, fishing, chopping wood, and mining.
+**Economy and Currency:** The bot manages an in-game currency system (gold) and allows users to convert between resources and gold. Users can also manage Binance Coin (BNB) balances and interact with the Binance Smart Chain.
 
-**2. Mini-Games**
+**Games and Challenges:** Includes games like Blackjack, Dice, Hi and Low, and trivia challenges. Users can also challenge others to battles, risking their resources and gold.
 
-Blackjack: A card game where users can bet gold.
-Hi/Low: A guessing game where users predict if the next number will be higher or lower.
-Dice Game: Users roll dice against the bot to win gold.
+**Shop System:** Users can buy and sell resources, purchase gold using BNB, and claim special roles.
 
-**3. Battles and Raids**
+**Leaderboard:** View top users based on various metrics, such as BNB balance, win/loss ratio, and troop count.
 
-Battles: Users can challenge each other, betting troops and gold. The winner is decided based on troop strength.
-Raids: Users can raid others to steal a percentage of their resources, with cooldowns to prevent frequent attacks.
+**Automated Processes:** Auto-mining feature that allows users to collect resources automatically over time.
 
-**4. Resource Management and Shop**
-
-Resource Gathering: Users can gather resources like fish, wood, and ore, which can be sold for gold.
-Shop: A virtual shop allows users to buy or sell resources and gold using Binance Coin (BNB).
-
-**5. Blockchain Integration**
-
-BNB Deposits/Withdrawals: Users can deposit BNB to their profile and withdraw to an external wallet.
-Token Transfers: Support for tipping other users in BNB or supported BEP-20 tokens.
-BNB Balance Checking: Users can check their BNB and supported BEP-20 token balances.
-
-**6. Role Management**
-
-High Roller Role: Users can purchase a special role if they accumulate enough gold.
-Administrator Tools: Commands for editing user data and managing messages are restricted to certain users.
+**Web3 Integration:** Users can generate BNB deposit addresses, check BNB balances, and transfer BNB or BEP-20 tokens to other users.
 
 ## Setup Instructions
 
-**1. Requirements**
+**Prerequisites**
 ```
 Python 3.8+
+A Discord Bot Token
+Binance Smart Chain node URL (e.g., https://bsc-dataseed.binance.org/)
 discord.py (pip install discord.py)
 web3.py (pip install web3)
 SQLite3 (comes pre-installed with Python)
 Other Python libraries: asyncio, logging, json, random, time
 ```
-**2. Configuration**
+
+## Installation
+
+**1. Clone the repository:**
 ```
-Discord Bot Token: Update the bot.run('YOUR_BOT_TOKEN') line with your Discord bot token.
-Game Data Channel: Replace GAME_DATA_CHANNEL_ID with the actual channel ID where game data will be sent.
-Role IDs: Replace ROLE_ID with your server's role ID for the High Roller role.
-BNB Shop Address: Set the SHOP_BNB_ADDRESS to the Binance Coin (BNB) address that will receive BNB payments.
+git clone https://github.com/your-username/discord-rpg-bot.git
+cd discord-rpg-bot
 ```
-**3. Database Initialization**
+**2. Install the required Python packages:**
+```
+pip install -r requirements.txt
+```
+**3. Set up your .env file with your Discord bot token and BSC node URL.**
 
-The bot uses SQLite to store user data. On the first run, the database will be initialized automatically with a table for storing user information.
+**4. Initialize the database:**
+```
+python initialize_db.py
+```
 
-**4. Running the Bot**
-
-Execute the bot with:
-
+## Running the Bot
 ```
 python bot.py
-Ensure that your environment variables are set correctly, especially your Discord bot token and Web3 HTTP provider URL.
 ```
-## Commands Overview
 
+## Command Overview
 
-**!hunt** - Go hunting and earn gold and XP.
+**!hunt:** Go hunting to earn gold and XP.
 
-**!fish** - Go fishing to catch fish and earn XP.
+**!fish:** Catch fish to earn XP.
 
-**!chop** - Chop wood to earn XP.
+**!chop:** Chop wood to earn XP.
 
-**!mine** - Mine ores to earn XP.
+**!mine:** Mine ores to earn XP.
 
-**!bet bj <amount>** - Play Blackjack.
+**!bet <game> <amount>:** Play a betting game (e.g., blackjack, hi_low, dice).
 
-**!bet hi_low <amount>** - Play Hi/Low.
+**!profile [user]:** View your profile or another user's profile.
 
-**!bet dice <amount>** - Play Dice.
+**!bag [user]:** View your resource bag or another user's bag.
 
-**!profile [user]** - View your or another user’s profile.
+**!buy_troops <amount>:** Buy troops for battle.
 
-**!bag [user]** - View your or another user’s resource bag.
+**!battle <user> <troops> <gold>:** Challenge another user to a battle.
 
-**!buy_troops <amount>** - Buy troops for battle.
+**!shop:** Open the shop to buy/sell resources and special roles.
 
-**!battle <user> <troops> <gold>** - Challenge another user to a battle.
+**!deposit:** Generate a BNB deposit address.
 
-**!edit <user> <field> <value>** - Edit a user’s attributes (admin only).
+**!withdraw <amount> <address>:** Withdraw BNB to an external address.
 
-**!shop** - Open the shop to buy/sell resources and roles.
+**!bals:** Check your BNB and token balances.
 
-**!deposit** - Generate a BNB deposit address.
+**!fee:** Check the current BNB transaction fee.
 
-**!withdraw <amount> <address>** - Withdraw BNB to an external address.
+**!tip <user> <amount>:** Tip another user in BNB or other supported tokens.
 
-**!bals** - Check your BNB balance.
+**!lb:** View the leaderboard.
 
-**!fee** - Check the current BNB transaction fee.
+**!trivia:** Start a trivia challenge.
 
-**!tip <user> <amount>** - Tip another user in BNB.
+## Database Schema
 
+**user_id:** Discord user ID (Primary Key)
+
+**level:** User level
+
+**xp:** Experience points
+
+**gold:** Gold balance
+
+**win_streak:** Current win streak
+
+**wins:** Number of wins
+
+**losses:** Number of losses
+
+**troops:** Number of troops owned
+
+**fish:** Amount of fish collected
+
+**wood:** Amount of wood collected
+
+**ore:** Amount of ore collected
+
+**bnb_address:** User's BNB deposit address
+
+**bnb_private_key:** User's BNB private key
+
+**bnb_balance:** User's BNB balance
+
+## Web3 Integration
+
+The bot connects to the Binance Smart Chain via Web3, allowing users to manage BNB and BEP-20 token balances, perform transactions, and interact with smart contracts.
+
+## Error Handling
+
+The bot includes error handling mechanisms to log and report issues to a designated Discord channel, ensuring smooth operation and quick troubleshooting.
+
+## Security Considerations
+
+**Private Keys:** The bot stores BNB private keys for users. Ensure these are securely handled and never exposed in logs or outputs.
+
+**Role Permissions:** Ensure the bot's role in Discord has appropriate permissions, especially for commands like !edit, !prune, and others that affect server content.
 
 ## License
 
@@ -114,7 +142,7 @@ This project is open-source and available under the MIT License.
 
 ## Contributions
 
-Contributions are welcome! Please fork the repository and submit a pull request with your changes.
+Contributions are welcome! Please open an issue or submit a pull request with any changes or enhancements.
 
 ## Support
 
