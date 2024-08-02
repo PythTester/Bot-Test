@@ -9,10 +9,13 @@ from eth_account import Account
 import logging
 import time
 import json
+import requests
 
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
+
+
 
 # Database setup
 conn = sqlite3.connect('user_data.db')
@@ -38,14 +41,14 @@ c.execute('''
 conn.commit()
 
 # Web3 setup
-w3 = Web3(Web3.HTTPProvider('https://bsc-dataseed.binance.org/'))
+w3 = Web3(Web3.HTTPProvider('https://example.binance.org/'))
 
 # Define the ID of the game-data channel
-GAME_DATA_CHANNEL_ID = 000000000000000000  # Replace with your channel ID
+GAME_DATA_CHANNEL_ID = 0000000000000000000  # Replace with your channel ID
 
 # Shop setup
-SHOP_BNB_ADDRESS = "000000000000000000" # Replace with Bot BNB Addr
-ROLE_ID = 000000000000000000  # Replace with your actual role ID
+SHOP_BNB_ADDRESS = "0000000000000000000"
+ROLE_ID = 00000000000000000000  # Replace with your actual role ID
 ROLE_COST_GOLD = 5_000_000_000  # 5B Gold
 FISH_TO_GOLD_RATE = 25  # 1 fish = 25 gold
 WOOD_TO_GOLD_RATE = 50  # 1 wood = 50 gold
@@ -921,7 +924,7 @@ class ShopView(View):
 
             embed = discord.Embed(
                 title="💸 Gold Purchase Successful!",
-                description=f"You bought **{gold_purchased} gold** with **{bnb_amount:.8f} BNB**.\nTransaction hash: [{tx_hash.hex()}](https://bscscan.com/tx/{tx_hash.hex()})",
+                description=f"You bought **{gold_purchased} gold** with **{bnb_amount:.8f} BNB**.\nTransaction hash: [{tx_hash.hex()}](https://example.com/tx/{tx_hash.hex()})",
                 color=0x00ff00
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
@@ -964,6 +967,10 @@ class ConfirmWithdrawView(View):
             return
 
         self.confirmed = True
+        try:
+            await interaction.message.delete()
+        except discord.errors.NotFound:
+            pass  # Handle case where message was already deleted
         self.stop()
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red)
@@ -972,23 +979,29 @@ class ConfirmWithdrawView(View):
             await interaction.response.send_message("This action is not for you.", ephemeral=True)
             return
 
-        await interaction.message.delete()
         self.confirmed = False
+        try:
+            await interaction.message.delete()
+        except discord.errors.NotFound:
+            pass  # Handle case where message was already deleted
         self.stop()
+
 
 
 @bot.command(name="withdraw")
 async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
     try:
+        # Delete the user's command message immediately
+        await ctx.message.delete()
+
         user_id = ctx.author.id
         data = get_user_data(user_id)
 
         # Normalize the token name to uppercase
         token = token.upper()
 
-        if token not in TOKEN_CONTRACTS:
-            await ctx.send(f"Unsupported token: {token}. Supported tokens are: {', '.join(TOKEN_CONTRACTS.keys())}")
-            await delete_user_command(ctx)
+        if token not in TOKEN_CONTRACTS and token != 'BNB':
+            await ctx.send(f"Unsupported token: {token}. Supported tokens are: BNB, {', '.join(TOKEN_CONTRACTS.keys())}")
             return
 
         # Calculate the gas fee for BNB or the transaction fee for BEP20 tokens
@@ -997,14 +1010,13 @@ async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
         fee_wei = gas_price * gas_limit
         fee_bnb = float(w3.from_wei(fee_wei, 'ether'))
 
-        # Calculate the 0.5% withdrawal fee
-        transaction_fee_bnb = amount * 0.005
+        # Calculate the 1% withdrawal fee
+        transaction_fee_bnb = amount * 0.01  # Updated to 1%
         total_fee_bnb = fee_bnb + transaction_fee_bnb
 
         # Check if the user has enough balance
         if token == 'BNB' and data["bnb_balance"] < (amount + total_fee_bnb):
             await ctx.send(f"You don't have enough BNB to withdraw {amount} BNB. You need at least {amount + total_fee_bnb} BNB to cover the withdrawal and fee.")
-            await delete_user_command(ctx)
             return
         elif token != 'BNB':
             token_contract = w3.eth.contract(address=Web3.to_checksum_address(TOKEN_CONTRACTS[token]), abi=ERC20_ABI)
@@ -1013,13 +1025,11 @@ async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
 
             if token_balance_eth < amount:
                 await ctx.send(f"You don't have enough {token} to withdraw {amount} {token}.")
-                await delete_user_command(ctx)
                 return
 
             # Ensure enough BNB for the transaction fee
             if data["bnb_balance"] < total_fee_bnb:
                 await ctx.send(f"You don't have enough BNB to cover the transaction fee of {total_fee_bnb:.8f} BNB.")
-                await delete_user_command(ctx)
                 return
 
         def format_decimal(value):
@@ -1031,7 +1041,7 @@ async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
             title="📤 Confirm Withdrawal",
             description=f"Are you sure you want to withdraw **{format_decimal(amount)} {token}** to `{address}`?\n\n"
                         f"**Network Gas Fee:** {format_decimal(fee_bnb)} BNB\n"
-                        f"**Transaction Fee (0.5%):** {format_decimal(transaction_fee_bnb)} BNB\n"
+                        f"**Transaction Fee (1%):** {format_decimal(transaction_fee_bnb)} BNB\n"
                         f"**Total Fee:** {format_decimal(total_fee_bnb)} BNB",
             color=0x00ff00
         )
@@ -1060,7 +1070,7 @@ async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
                 signed_tx = w3.eth.account.sign_transaction(tx, data["bnb_private_key"])
                 tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
 
-                # Send the 0.5% fee to the shop's BNB address
+                # Send the 1% fee to the shop's BNB address
                 fee_tx = {
                     'nonce': w3.eth.get_transaction_count(data["bnb_address"]) + 1,  # Increment nonce for the next transaction
                     'to': SHOP_BNB_ADDRESS,
@@ -1085,7 +1095,7 @@ async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
                 signed_tx = w3.eth.account.sign_transaction(tx, data["bnb_private_key"])
                 tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
 
-                # Send the 0.5% fee to the shop's BNB address
+                # Send the 1% fee to the shop's BNB address
                 fee_tx = {
                     'nonce': w3.eth.get_transaction_count(data["bnb_address"]) + 1,  # Increment nonce for the next transaction
                     'to': SHOP_BNB_ADDRESS,
@@ -1102,8 +1112,8 @@ async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
 
             embed = discord.Embed(
                 title="📤 Withdrawal Successful",
-                description=f"Transaction hash: [{tx_hash.hex()}](https://bscscan.com/tx/{tx_hash.hex()})\n"
-                            f"Fee transaction hash: [{fee_tx_hash.hex()}](https://bscscan.com/tx/{fee_tx_hash.hex()})",
+                description=f"Transaction hash: [{tx_hash.hex()}](https://example.com/tx/{tx_hash.hex()})\n"
+                            f"Fee transaction hash: [{fee_tx_hash.hex()}](https://example.com/tx/{fee_tx_hash.hex()})",
                 color=0x00ff00
             )
             await ctx.send(embed=embed)
@@ -1112,7 +1122,6 @@ async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
 
     except Exception as e:
         await send_error_to_channel(ctx, str(e))
-
 
 
 
@@ -1133,14 +1142,14 @@ async def bals(ctx):
 
         # Contract addresses for the tokens
         token_contracts = {
-            "CAKE": "000000000000000000000000000000000000000000", # Replace With Token Addr
-            "BUSD": "000000000000000000000000000000000000000000", # Replace With Token Addr
-            "USDT": "000000000000000000000000000000000000000000", # Replace With Token Addr
-            "ETH": "000000000000000000000000000000000000000000", # Replace With Token Addr
-            "DOT": "000000000000000000000000000000000000000000", # Replace With Token Addr
-            "ADA": "000000000000000000000000000000000000000000", # Replace With Token Addr
-            "LINK": "000000000000000000000000000000000000000000", # Replace With Token Addr
-            "UNI": "000000000000000000000000000000000000000000" # Replace With Token Addr
+            "CAKE": "000000000000000000000000000000000000000000",
+            "BUSD": "000000000000000000000000000000000000000000",
+            "USDT": "000000000000000000000000000000000000000000",
+            "ETH": "000000000000000000000000000000000000000000",
+            "DOT": "000000000000000000000000000000000000000000",
+            "ADA": "000000000000000000000000000000000000000000",
+            "LINK": "000000000000000000000000000000000000000000",
+            "UNI": "000000000000000000000000000000000000000000"
         }
 
         # ABI for the token contracts
@@ -1180,6 +1189,7 @@ async def bals(ctx):
             color=0x00ff00
         )
         embed.add_field(name="BNB Balance", value=f"**{format_decimal(bnb_balance)} BNB**", inline=False)
+
         for token_name, balance in token_balances.items():
             embed.add_field(name=f"{token_name} Balance", value=f"**{format_decimal(balance)} {token_name}**", inline=False)
 
@@ -1187,8 +1197,6 @@ async def bals(ctx):
         await delete_user_command(ctx)
     except Exception as e:
         await send_error_to_channel(ctx, str(e))
-
-
 
 
 @bot.command(name="fee")
@@ -1203,14 +1211,14 @@ async def fee(ctx, amount: float = None):
             # Format the value to remove unnecessary trailing zeros
             return f"{value:.8f}".rstrip('0').rstrip('.')
 
-        # If an amount is provided, calculate the 0.5% transaction fee
+        # If an amount is provided, calculate the 1% transaction fee
         if amount is not None:
-            transaction_fee_bnb = amount * 0.005
+            transaction_fee_bnb = amount * 0.01  # 1% fee
             total_fee_bnb = fee_bnb + transaction_fee_bnb
             description = (
                 f"To withdraw **{format_decimal(amount)} BNB**, the estimated fees are:\n\n"
                 f"**Network Gas Fee:** {format_decimal(fee_bnb)} BNB\n"
-                f"**Transaction Fee (0.5%):** {format_decimal(transaction_fee_bnb)} BNB\n"
+                f"**Transaction Fee (1%):** {format_decimal(transaction_fee_bnb)} BNB\n"
                 f"**Total Fee:** {format_decimal(total_fee_bnb)} BNB"
             )
         else:
@@ -1218,6 +1226,11 @@ async def fee(ctx, amount: float = None):
                 f"The current estimated fee for a standard BNB transaction is:\n\n"
                 f"**Network Gas Fee:** {format_decimal(fee_bnb)} BNB"
             )
+
+        # Add the bot's transaction fee statement
+        description += (
+            f"\n\n**Bot Transaction Fee:** 1% of the withdrawal amount."
+        )
 
         embed = discord.Embed(
             title="💸 Withdrawal Fee Estimate",
@@ -1228,6 +1241,7 @@ async def fee(ctx, amount: float = None):
         await delete_user_command(ctx)
     except Exception as e:
         await send_error_to_channel(ctx, str(e))
+
 
 
 
@@ -1265,8 +1279,8 @@ class ConfirmTipView(View):
 # A dictionary mapping token names to their contract addresses
 TOKEN_CONTRACTS = {
     'BNB': None,  # BNB is native to the BSC network, so no contract is needed
-    'CAKE': '0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82',
-    'BUSD': '0xe9e7cea3dedca5984780bafc599bd69add087d56',
+    'CAKE': '000000000000000000000000000000000000000000',
+    'BUSD': '000000000000000000000000000000000000000000',
     # Add other tokens here...
 }
 
@@ -1386,7 +1400,7 @@ async def tip(ctx, member: discord.Member, amount: str, token: str = 'BNB'):
             confirmation_embed = discord.Embed(
                 title="🎉 Tip Successful",
                 description=f"You tipped **{amount:.8f} {token}** to {member.display_name}.\n"
-                            f"Transaction hash: [{tx_hash.hex()}](https://bscscan.com/tx/{tx_hash.hex()})",
+                            f"Transaction hash: [{tx_hash.hex()}](https://example.com/tx/{tx_hash.hex()})",
                 color=0x00ff00
             )
             await ctx.send(embed=confirmation_embed)
@@ -1396,7 +1410,6 @@ async def tip(ctx, member: discord.Member, amount: str, token: str = 'BNB'):
 
     except Exception as e:
         await send_error_to_channel(ctx, str(e))
-
 
 
 # Function to get token balance
@@ -1604,7 +1617,7 @@ async def handle_auto_mine(ctx_or_interaction):
         await send_error_to_channel(ctx_or_interaction, str(e))
 
 # Define the role ID and cost
-ROLE_ID = 000000000000000000  # Replace with your actual role ID
+ROLE_ID = 0000000000000000  # Replace with your actual role ID
 
 @bot.command(name="highroller")
 async def highroller(ctx):
