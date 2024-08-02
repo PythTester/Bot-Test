@@ -4,3 +4,4 @@ eth-account==0.7.0
 asyncio==3.4.3
 sqlite3
 requests
+from decimal import Decimal, getcontext
