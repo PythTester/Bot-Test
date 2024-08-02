@@ -88,7 +88,7 @@ python bot.py
 
 **!tip <user> <amount>:** Tip another user in BNB or other supported tokens.
 
-**!airdrop <token> <amount> <#>:** Airdrop tokens to specified # of users. 
+**!airdrop <token> <amount> <>:** Airdrop tokens to specified # of users. 
 
 **!lb:** View the leaderboard.
 
