@@ -2019,6 +2019,265 @@ async def trivia(ctx):
     except Exception as e:
         await send_error_to_channel(ctx, str(e))
 
+## Format Tokens
+def format_bnb(amount):
+    return "{:.8f}".format(Decimal(amount).normalize()).rstrip('0').rstrip('.')
 
+# Function to send BEP-20 tokens (like CAKE) on the blockchain
+async def send_bep20_on_blockchain(sender_address, private_key, recipient_address, amount, token_contract_address):
+    try:
+        # Load the token contract
+        token_contract = w3.eth.contract(address=Web3.to_checksum_address(token_contract_address), abi=ERC20_ABI)
+
+        # Build the transaction
+        nonce = w3.eth.get_transaction_count(sender_address)
+        gas_price = w3.eth.gas_price
+        gas_limit = 60000  # Token transfers require more gas than simple BNB transfers
+
+        tx = token_contract.functions.transfer(recipient_address, w3.to_wei(amount, 'ether')).build_transaction({
+            'from': sender_address,
+            'nonce': nonce,
+            'gas': gas_limit,
+            'gasPrice': gas_price,
+        })
+
+        # Sign and send the transaction
+        signed_tx = w3.eth.account.sign_transaction(tx, private_key)
+        tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+        tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+
+        if tx_receipt['status'] == 1:
+            return tx_hash.hex()
+        else:
+            raise Exception("Transaction failed")
+    except Exception as e:
+        print(f"Failed to send BEP-20 token: {e}")
+        return None
+
+# Function to fetch the BEP-20 token balance for a user
+def get_token_balance(address, token_contract_address):
+    try:
+        token_contract = w3.eth.contract(address=Web3.to_checksum_address(token_contract_address), abi=ERC20_ABI)
+        balance = token_contract.functions.balanceOf(address).call()
+        return w3.from_wei(balance, 'ether')
+    except Exception as e:
+        print(f"Error retrieving balance for {token_contract_address}: {e}")
+        return Decimal(0)
+
+# Function to send BNB on the blockchain
+async def send_bnb_on_blockchain(sender_address, private_key, recipient_address, amount):
+    try:
+        nonce = w3.eth.get_transaction_count(sender_address)
+        gas_price = w3.eth.gas_price
+        gas_limit = 21000  # Standard gas limit for BNB transfer
+
+        tx = {
+            'nonce': nonce,
+            'to': recipient_address,
+            'value': w3.to_wei(amount, 'ether'),
+            'gas': gas_limit,
+            'gasPrice': gas_price
+        }
+
+        signed_tx = w3.eth.account.sign_transaction(tx, private_key)
+        tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+        tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+
+        if tx_receipt['status'] == 1:
+            return tx_hash.hex()
+        else:
+            raise Exception("Transaction failed")
+    except Exception as e:
+        print(f"Failed to send BNB: {e}")
+        return None
+
+# Airdrop command
+@bot.command(name="airdrop")
+async def airdrop(ctx, token: str, total_amount: float, winners: int):
+    try:
+        user_id = ctx.author.id
+        data = get_user_data(user_id)  # Use the existing get_user_data function
+
+        # Normalize the token input
+        token = token.upper()
+
+        # Check if the token is supported
+        if token not in TOKEN_CONTRACTS:
+            await ctx.send("Unsupported token. Please use a supported token.")
+            return
+
+        # Determine if the airdrop is for BNB or a BEP-20 token
+        if token == "BNB":
+            amount_per_winner = Decimal(total_amount) / Decimal(winners)
+            gas_limit = 21000  # Standard gas limit for BNB transfer
+            transaction_function = send_bnb_on_blockchain
+            user_balance = data['bnb_balance']
+        else:
+            amount_per_winner = Decimal(total_amount) / Decimal(winners)
+            gas_limit = 60000  # Higher gas limit for token transfers
+            transaction_function = send_bep20_on_blockchain
+
+            # Fetch the token balance dynamically
+            token_contract_address = TOKEN_CONTRACTS[token]
+            user_balance = get_token_balance(data['bnb_address'], token_contract_address)
+
+        gas_price = w3.eth.gas_price
+        gas_fee = gas_limit * gas_price * winners  # Total gas fee for all transactions
+        gas_fee_bnb = w3.from_wei(gas_fee, 'ether')
+
+        # Check if the user has enough balance
+        if token == "BNB":
+            total_needed = Decimal(total_amount) + Decimal(gas_fee_bnb)
+            if data['bnb_balance'] < total_needed:
+                await ctx.send("You don't have enough BNB to cover the airdrop and transaction fees.")
+                return
+        else:
+            if data['bnb_balance'] < Decimal(gas_fee_bnb):
+                await ctx.send("You don't have enough BNB to cover the gas fees.")
+                return
+            if user_balance < Decimal(total_amount):
+                await ctx.send(f"You don't have enough {token} to complete this airdrop.")
+                return
+
+        # Format the total amount and gas fee
+        formatted_total_amount = format_bnb(total_amount)
+        formatted_gas_fee = format_bnb(gas_fee_bnb)
+
+        # Create the initial confirmation embed
+        embed = discord.Embed(
+            title="🎉 Airdrop Confirmation",
+            description=f"You are about to start an airdrop of **{formatted_total_amount} {token}** for **{winners}** users.\n\n"
+                        f"**Gas Fee (in BNB):** {formatted_gas_fee} BNB\n\n"
+                        f"Do you want to proceed?",
+            color=0x00FF00
+        )
+        embed.set_footer(text="Please confirm or decline within 60 seconds.")
+
+        # Send the confirmation message and delete the original command message
+        confirmation_message = await ctx.send(embed=embed)
+        await ctx.message.delete()  # Delete the command message
+
+        # Create the confirmation view
+        class ConfirmAirdropView(View):
+            def __init__(self, author_id, amount_per_winner, winners, token):
+                super().__init__(timeout=60)
+                self.author_id = author_id
+                self.amount_per_winner = amount_per_winner
+                self.winners = winners
+                self.token = token
+
+            @discord.ui.button(label="Confirm", style=discord.ButtonStyle.green)
+            async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+                if interaction.user.id != self.author_id:
+                    await interaction.response.send_message("You are not authorized to confirm this airdrop.", ephemeral=True)
+                    return
+
+                # Start the airdrop process
+                await self.start_airdrop(interaction, confirmation_message)
+
+            @discord.ui.button(label="Decline", style=discord.ButtonStyle.red)
+            async def decline(self, interaction: discord.Interaction, button: discord.ui.Button):
+                if interaction.user.id != self.author_id:
+                    await interaction.response.send_message("You are not authorized to decline this airdrop.", ephemeral=True)
+                    return
+
+                # Cancel the airdrop
+                await confirmation_message.delete()
+                await interaction.response.send_message("The airdrop has been canceled and the message has been deleted.", ephemeral=True)
+
+            async def start_airdrop(self, interaction, original_message):
+                # Update the message to show the airdrop has started
+                embed = discord.Embed(
+                    title="🎉 Airdrop Started!",
+                    description=f"Be quick! The first {self.winners} users to claim will share **{format_bnb(self.amount_per_winner * self.winners)} {self.token}**!",
+                    color=0x00FF00
+                )
+                embed.set_footer(text="Click the button below to claim your share!")
+                
+                # Create the button for users to claim the airdrop
+                class AirdropButton(View):
+                    def __init__(self, author_id, amount_per_winner, winners, token):
+                        super().__init__(timeout=None)
+                        self.author_id = author_id
+                        self.amount_per_winner = amount_per_winner
+                        self.winners = winners
+                        self.claimed_users = []
+                        self.token = token
+
+                    @discord.ui.button(label="Claim", style=discord.ButtonStyle.primary)
+                    async def claim(self, interaction: discord.Interaction, button: discord.ui.Button):
+                        if interaction.user.id in self.claimed_users:
+                            await interaction.response.send_message("You have already claimed this airdrop!", ephemeral=True)
+                            return
+
+                        if len(self.claimed_users) < self.winners:
+                            self.claimed_users.append(interaction.user.id)
+                            await interaction.response.send_message(f"🎉 You have claimed your share of {format_bnb(self.amount_per_winner)} {self.token}!", ephemeral=True)
+
+                            # Send the BNB or BEP-20 token to the user immediately after claiming
+                            sender_data = get_user_data(self.author_id)
+                            recipient_data = get_user_data(interaction.user.id)
+                            
+                            tx_hash = None
+                            if self.token == "BNB":
+                                tx_hash = await send_bnb_on_blockchain(sender_data['bnb_address'], sender_data['bnb_private_key'], recipient_data['bnb_address'], self.amount_per_winner)
+                            else:
+                                token_contract_address = TOKEN_CONTRACTS[self.token]
+                                tx_hash = await send_bep20_on_blockchain(sender_data['bnb_address'], sender_data['bnb_private_key'], recipient_data['bnb_address'], self.amount_per_winner, token_contract_address)
+
+                            if tx_hash:
+                                if self.token == "BNB":
+                                    recipient_data['bnb_balance'] += Decimal(self.amount_per_winner)
+                                    sender_data['bnb_balance'] -= Decimal(self.amount_per_winner) + Decimal(gas_fee_bnb)
+                                else:
+                                    recipient_data[f'{self.token.lower()}_balance'] += Decimal(self.amount_per_winner)
+                                    sender_data[f'{self.token.lower()}_balance'] -= Decimal(self.amount_per_winner)
+                                    sender_data['bnb_balance'] -= Decimal(gas_fee_bnb)
+
+                                update_user_data(interaction.user.id, recipient_data)
+                                update_user_data(self.author_id, sender_data)
+
+                                # Create a more appealing transaction message
+                                transaction_embed = discord.Embed(
+                                    title="💸 Transaction Successful!",
+                                    description=f"**{format_bnb(self.amount_per_winner)} {self.token}** has been sent to <@{interaction.user.id}>!\n\n"
+                                                f"**Transaction ID:** [`{tx_hash}`](https://example.com/tx/{tx_hash})",
+                                    color=0x00FF00
+                                )
+                                transaction_embed.set_footer(text="Thank you for participating in the airdrop!")
+                                transaction_embed.set_thumbnail(url="https://example.com/transaction-icon.png")  # Optional: Add a relevant icon
+
+                                await interaction.followup.send(embed=transaction_embed, ephemeral=True)
+                            else:
+                                await interaction.followup.send("❌ Failed to send. Please contact support.", ephemeral=True)
+
+                            if len(self.claimed_users) == self.winners:
+                                button.disabled = True
+                                await interaction.message.edit(view=self)
+                                await self.end_airdrop(interaction, original_message)
+                        else:
+                            await interaction.response.send_message("Sorry, the airdrop has ended.", ephemeral=True)
+
+                    async def end_airdrop(self, interaction, original_message):
+                        # Edit the original message to indicate the end of the airdrop
+                        claimed_users_mentions = ', '.join([f"<@{user_id}>" for user_id in self.claimed_users])
+                        embed = discord.Embed(
+                            title="🎉 Airdrop Ended!",
+                            description=f"The airdrop has ended! Congratulations to the winners: {claimed_users_mentions}",
+                            color=0x00FF00
+                        )
+                        await original_message.edit(embed=embed)
+
+                # Update the original message to start the airdrop with a claim button
+                view = AirdropButton(self.author_id, self.amount_per_winner, self.winners, self.token)
+                await original_message.edit(embed=embed, view=view)
+
+        # Send the confirmation message with buttons
+        view = ConfirmAirdropView(user_id, amount_per_winner, winners, token)
+        await confirmation_message.edit(embed=embed, view=view)
+
+    except Exception as e:
+        await ctx.send(f"An error occurred: {e}")
+        
 # Start the bot
 bot.run('')
