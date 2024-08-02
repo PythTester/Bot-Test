@@ -80,13 +80,15 @@ python bot.py
 
 **!deposit:** Generate a BNB deposit address.
 
-**!withdraw <amount> <address>:** Withdraw BNB to an external address.
+**!withdraw <amount> <address>:** Withdraw BNB.
 
 **!bals:** Check your BNB and token balances.
 
 **!fee:** Check the current BNB transaction fee.
 
 **!tip <user> <amount>:** Tip another user in BNB or other supported tokens.
+
+**!airdrop <token> <amount> <#>:** Airdrop tokens to specified # of users. 
 
 **!lb:** View the leaderboard.
 
