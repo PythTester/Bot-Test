@@ -987,38 +987,41 @@ class ConfirmWithdrawView(View):
         self.stop()
 
 
-
 @bot.command(name="withdraw")
 async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
     try:
-        # Delete the user's command message immediately
         await ctx.message.delete()
 
         user_id = ctx.author.id
         data = get_user_data(user_id)
 
-        # Normalize the token name to uppercase
         token = token.upper()
 
-        if token not in TOKEN_CONTRACTS and token != 'BNB':
+        if token not in TOKEN_CONTRACTS:
             await ctx.send(f"Unsupported token: {token}. Supported tokens are: BNB, {', '.join(TOKEN_CONTRACTS.keys())}")
             return
 
-        # Calculate the gas fee for BNB or the transaction fee for BEP20 tokens
         gas_price = w3.eth.gas_price
-        gas_limit = 21000  # Standard gas limit for a simple BNB transfer; adjust if needed for token transfers
+        gas_limit = 21000 if token == 'BNB' else 60000  # Higher gas limit for token transfers
         fee_wei = gas_price * gas_limit
         fee_bnb = float(w3.from_wei(fee_wei, 'ether'))
 
-        # Calculate the 1% withdrawal fee
-        transaction_fee_bnb = amount * 0.01  # Updated to 1%
-        total_fee_bnb = fee_bnb + transaction_fee_bnb
+        if token == 'BNB':
+            transaction_fee_bnb = amount * 0.01
+            total_fee_bnb = fee_bnb + transaction_fee_bnb
+            if data["bnb_balance"] < (amount + total_fee_bnb):
+                await ctx.send(f"You don't have enough BNB to withdraw {amount} BNB. You need at least {amount + total_fee_bnb} BNB to cover the withdrawal and fee.")
+                return
+        else:
+            token_price_in_bnb = get_token_to_bnb_price(token)
+            if token_price_in_bnb is None:
+                await ctx.send(f"Could not retrieve {token} price in BNB. Please try again later.")
+                return
 
-        # Check if the user has enough balance
-        if token == 'BNB' and data["bnb_balance"] < (amount + total_fee_bnb):
-            await ctx.send(f"You don't have enough BNB to withdraw {amount} BNB. You need at least {amount + total_fee_bnb} BNB to cover the withdrawal and fee.")
-            return
-        elif token != 'BNB':
+            amount_in_bnb = amount * token_price_in_bnb
+            transaction_fee_bnb = amount_in_bnb * 0.01
+            total_fee_bnb = fee_bnb + transaction_fee_bnb
+
             token_contract = w3.eth.contract(address=Web3.to_checksum_address(TOKEN_CONTRACTS[token]), abi=ERC20_ABI)
             token_balance = token_contract.functions.balanceOf(data["bnb_address"]).call()
             token_balance_eth = float(w3.from_wei(token_balance, 'ether'))
@@ -1027,16 +1030,13 @@ async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
                 await ctx.send(f"You don't have enough {token} to withdraw {amount} {token}.")
                 return
 
-            # Ensure enough BNB for the transaction fee
             if data["bnb_balance"] < total_fee_bnb:
                 await ctx.send(f"You don't have enough BNB to cover the transaction fee of {total_fee_bnb:.8f} BNB.")
                 return
 
         def format_decimal(value):
-            # Format the value to remove unnecessary trailing zeros
             return f"{value:.8f}".rstrip('0').rstrip('.')
 
-        # Ask for confirmation
         embed = discord.Embed(
             title="📤 Confirm Withdrawal",
             description=f"Are you sure you want to withdraw **{format_decimal(amount)} {token}** to `{address}`?\n\n"
@@ -1048,18 +1048,12 @@ async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
         view = ConfirmWithdrawView(user_id, amount, address, token, total_fee_bnb)
         confirmation_message = await ctx.send(embed=embed, view=view)
 
-        # Wait for the user's response
         await view.wait()
-
-        # After confirming or declining, delete the confirmation message
         await confirmation_message.delete()
 
         if view.confirmed:
             if token == 'BNB':
-                # Deduct the total fee from the user's balance
                 data["bnb_balance"] -= (amount + total_fee_bnb)
-
-                # Prepare the transaction to send BNB to the recipient
                 tx = {
                     'nonce': w3.eth.get_transaction_count(data["bnb_address"]),
                     'to': address,
@@ -1070,9 +1064,8 @@ async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
                 signed_tx = w3.eth.account.sign_transaction(tx, data["bnb_private_key"])
                 tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
 
-                # Send the 1% fee to the shop's BNB address
                 fee_tx = {
-                    'nonce': w3.eth.get_transaction_count(data["bnb_address"]) + 1,  # Increment nonce for the next transaction
+                    'nonce': w3.eth.get_transaction_count(data["bnb_address"]) + 1,
                     'to': SHOP_BNB_ADDRESS,
                     'value': w3.to_wei(transaction_fee_bnb, 'ether'),
                     'gas': gas_limit,
@@ -1080,9 +1073,7 @@ async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
                 }
                 signed_fee_tx = w3.eth.account.sign_transaction(fee_tx, data["bnb_private_key"])
                 fee_tx_hash = w3.eth.send_raw_transaction(signed_fee_tx.rawTransaction)
-
             else:
-                # Proceed with the token transfer
                 token_contract_address = TOKEN_CONTRACTS[token]
                 token_contract = w3.eth.contract(address=Web3.to_checksum_address(token_contract_address), abi=ERC20_ABI)
 
@@ -1095,9 +1086,8 @@ async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
                 signed_tx = w3.eth.account.sign_transaction(tx, data["bnb_private_key"])
                 tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
 
-                # Send the 1% fee to the shop's BNB address
                 fee_tx = {
-                    'nonce': w3.eth.get_transaction_count(data["bnb_address"]) + 1,  # Increment nonce for the next transaction
+                    'nonce': w3.eth.get_transaction_count(data["bnb_address"]) + 1,
                     'to': SHOP_BNB_ADDRESS,
                     'value': w3.to_wei(transaction_fee_bnb, 'ether'),
                     'gas': gas_limit,
@@ -1106,14 +1096,12 @@ async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
                 signed_fee_tx = w3.eth.account.sign_transaction(fee_tx, data["bnb_private_key"])
                 fee_tx_hash = w3.eth.send_raw_transaction(signed_fee_tx.rawTransaction)
 
-            # Update the user's balance in the database
-            if token == 'BNB':
-                update_user_data(user_id, data)
+            update_user_data(user_id, data)
 
             embed = discord.Embed(
                 title="📤 Withdrawal Successful",
-                description=f"Transaction hash: [{tx_hash.hex()}](https://example.com/tx/{tx_hash.hex()})\n"
-                            f"Fee transaction hash: [{fee_tx_hash.hex()}](https://example.com/tx/{fee_tx_hash.hex()})",
+                description=f"Transaction hash: [{tx_hash.hex()}](https://bscscan.com/tx/{tx_hash.hex()})\n"
+                            f"Fee transaction hash: [{fee_tx_hash.hex()}](https://bscscan.com/tx/{fee_tx_hash.hex()})",
                 color=0x00ff00
             )
             await ctx.send(embed=embed)
@@ -1199,31 +1187,97 @@ async def bals(ctx):
         await send_error_to_channel(ctx, str(e))
 
 
-@bot.command(name="fee")
-async def fee(ctx, amount: float = None):
+# Function to get the current price of a token in BNB using CoinGecko API
+def get_token_to_bnb_price(token):
     try:
+        contract_address = TOKEN_CONTRACTS.get(token)
+        if not contract_address:
+            raise ValueError(f"Token {token} is not supported for price fetching.")
+
+        # Use CoinGecko API to get token price in BNB
+        url = f"https://api.coingecko.com/api/v3/simple/token_price/binance-smart-chain?contract_addresses={contract_address}&vs_currencies=bnb"
+        response = requests.get(url)
+        response.raise_for_status()  # Raise an HTTPError if the HTTP request returned an unsuccessful status code
+
+        data = response.json()
+        print(f"API Response for {token}: {data}")  # Debugging step: print the API response
+
+        if contract_address in data and 'bnb' in data[contract_address]:
+            token_price_in_bnb = float(data[contract_address]['bnb'])
+            return token_price_in_bnb
+        else:
+            raise ValueError(f"Unexpected API response format: {data}")
+
+    except requests.exceptions.RequestException as e:
+        print(f"Request error: {e}")
+        return None
+    except ValueError as ve:
+        print(f"Value error: {ve}")
+        return None
+    except Exception as e:
+        print(f"General error: {e}")
+        return None
+
+@bot.command(name="fee")
+async def fee(ctx, token: str = "BNB", amount: str = None):
+    try:
+        token = token.upper()
+
+        # Check if the token is supported
+        if token not in TOKEN_CONTRACTS:
+            await ctx.send(f"Unsupported token: {token}. Supported tokens are: {', '.join(TOKEN_CONTRACTS.keys())}")
+            return
+
+        # Convert the amount to a float, if provided
+        if amount is not None:
+            try:
+                amount = float(amount)
+            except ValueError:
+                await ctx.send("Please provide a valid number for the amount.")
+                return
+
+        # Determine the gas limit based on the token
+        if token == "BNB":
+            gas_limit = 21000  # Standard gas limit for BNB transfer
+        else:
+            gas_limit = 60000  # Higher gas limit for BEP-20 token transfers
+
         gas_price = w3.eth.gas_price  # Get the current gas price
-        gas_limit = 21000  # Standard gas limit for a simple BNB transfer
         fee_wei = gas_price * gas_limit
-        fee_bnb = float(w3.from_wei(fee_wei, 'ether'))
+        fee_bnb = float(w3.from_wei(fee_wei, 'ether'))  # Convert gas fee to BNB
 
         def format_decimal(value):
             # Format the value to remove unnecessary trailing zeros
             return f"{value:.8f}".rstrip('0').rstrip('.')
 
-        # If an amount is provided, calculate the 1% transaction fee
+        transaction_fee_bnb = 0
+        if token != "BNB" and amount is not None:
+            # Fetch the price of the token in BNB using CoinGecko
+            token_price_in_bnb = get_token_to_bnb_price(token)
+            if token_price_in_bnb is None:
+                await ctx.send(f"Could not retrieve {token} price in BNB. Please try again later.")
+                return
+
+            # Convert the token amount to BNB equivalent
+            amount_in_bnb = amount * token_price_in_bnb
+
+            # Calculate the 1% fee in BNB
+            transaction_fee_bnb = amount_in_bnb * 0.01
+        elif amount is not None:
+            transaction_fee_bnb = amount * 0.01
+
+        total_fee_bnb = fee_bnb + transaction_fee_bnb
+
         if amount is not None:
-            transaction_fee_bnb = amount * 0.01  # 1% fee
-            total_fee_bnb = fee_bnb + transaction_fee_bnb
             description = (
-                f"To withdraw **{format_decimal(amount)} BNB**, the estimated fees are:\n\n"
+                f"To withdraw **{format_decimal(amount)} {token}**, the estimated fees are:\n\n"
                 f"**Network Gas Fee:** {format_decimal(fee_bnb)} BNB\n"
                 f"**Transaction Fee (1%):** {format_decimal(transaction_fee_bnb)} BNB\n"
                 f"**Total Fee:** {format_decimal(total_fee_bnb)} BNB"
             )
         else:
             description = (
-                f"The current estimated fee for a standard BNB transaction is:\n\n"
+                f"The current estimated fee for a standard {token} transaction is:\n\n"
                 f"**Network Gas Fee:** {format_decimal(fee_bnb)} BNB"
             )
 
@@ -1233,7 +1287,7 @@ async def fee(ctx, amount: float = None):
         )
 
         embed = discord.Embed(
-            title="💸 Withdrawal Fee Estimate",
+            title=f"💸 Withdrawal Fee Estimate ({token})",
             description=description,
             color=0x00ff00
         )
