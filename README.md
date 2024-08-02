@@ -66,29 +66,29 @@ python bot.py
 
 **!mine:** Mine ores to earn XP.
 
-**!bet <game> <amount>:** Play a betting game (e.g., blackjack, hi_low, dice).
+**!bet [game] [amount]:** Play a betting game (e.g., blackjack, hi_low, dice).
 
 **!profile [user]:** View your profile or another user's profile.
 
 **!bag [user]:** View your resource bag or another user's bag.
 
-**!buy_troops <amount>:** Buy troops for battle.
+**!buy_troops [amount]:** Buy troops for battle.
 
-**!battle <user> <troops> <gold>:** Challenge another user to a battle.
+**!battle [user] [troops] [gold]:** Challenge another user to a battle.
 
 **!shop:** Open the shop to buy/sell resources and special roles.
 
 **!deposit:** Generate a BNB deposit address.
 
-**!withdraw <amount> <address>:** Withdraw BNB.
+**!withdraw [amount] [address]:** Withdraw BNB.
 
 **!bals:** Check your BNB and token balances.
 
 **!fee:** Check the current BNB transaction fee.
 
-**!tip <user> <amount>:** Tip another user in BNB or other supported tokens.
+**!tip [user] [amount]:** Tip another user in BNB or other supported tokens.
 
-**!airdrop <token> <amount> <>:** Airdrop tokens to specified # of users. 
+**!airdrop [token] [amount] [#]:** Airdrop tokens to specified # of users. 
 
 **!lb:** View the leaderboard.
 
