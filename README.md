@@ -44,7 +44,6 @@ cd discord-rpg-bot
 ```
 pip install -r requirements.txt
 ```
-**3. Set up your .env file with your Discord bot token and BSC node URL.**
 
 **4. Initialize the database:**
 ```
@@ -58,6 +57,8 @@ python bot.py
 
 ## Command Overview
 
+**Adventure & Resource Gathering**
+
 **!hunt:** Go hunting to earn gold and XP.
 
 **!fish:** Catch fish to earn XP.
@@ -66,17 +67,29 @@ python bot.py
 
 **!mine:** Mine ores to earn XP.
 
-**!bet [game] [amount]:** Play a betting game (e.g., blackjack, hi_low, dice).
+**Economy Management**
 
 **!profile [user]:** View your profile or another user's profile.
 
 **!bag [user]:** View your resource bag or another user's bag.
 
-**!buy_troops [amount]:** Buy troops for battle.
+**!troops:** Buy troops for battle.
 
 **!battle [user] [troops] [gold]:** Challenge another user to a battle.
 
 **!shop:** Open the shop to buy/sell resources and special roles.
+
+**Gambling & Games**
+
+**!bet bj [amount]:** Play a game of blackjack and bet gold.
+
+**!bet hl [amount]:** Play a high-low guessing game and bet gold.
+
+**!bet dice <amount>:** - Play a dice game and bet gold.
+
+**!trivia:** Start a trivia challenge.
+
+**Web3 Integration**
 
 **!deposit:** Generate a BNB deposit address.
 
@@ -92,7 +105,22 @@ python bot.py
 
 **!lb:** View the leaderboard.
 
-**!trivia:** Start a trivia challenge.
+**Administration**
+
+**!edit [user] [field] [value]:** - Edit a user's data (Admin only).
+**!prune [number]:** - Delete a specified number of messages (Admin only).
+
+**Miscellaneous**
+
+**!s <category> <suggestion>:** - Submit a suggestion to the admins.
+
+## Database Structure
+
+**user_data.db**
+- users: Stores user profiles, including levels, XP, gold, resources, and Web3 information.
+
+**stats_database.db**
+- user_stats: Tracks cumulative stats such as total fish caught, wood chopped, ore mined, and monsters defeated.
 
 ## Database Schema
 
@@ -127,6 +155,18 @@ python bot.py
 ## Web3 Integration
 
 The bot connects to the Binance Smart Chain via Web3, allowing users to manage BNB and BEP-20 token balances, perform transactions, and interact with smart contracts.
+
+## Supported Tokens
+
+- BNB
+- CAKE
+- BUSD
+- USDT
+- ETH
+- DOT
+- ADA
+- LINK
+- UNI
 
 ## Error Handling
 
