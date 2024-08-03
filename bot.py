@@ -10,12 +10,11 @@ import logging
 import time
 import json
 import requests
+from decimal import Decimal, getcontext
 
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
-
-
 
 # Database setup
 conn = sqlite3.connect('user_data.db')
@@ -41,18 +40,18 @@ c.execute('''
 conn.commit()
 
 # Web3 setup
-w3 = Web3(Web3.HTTPProvider('https://example.binance.org/'))
+w3 = Web3(Web3.HTTPProvider('https://example-dataseed.binance.org/'))
 
 # Define the ID of the game-data channel
-GAME_DATA_CHANNEL_ID = 0000000000000000000  # Replace with your channel ID
+GAME_DATA_CHANNEL_ID = 000000000000000000  # Replace with your channel ID
 
 # Shop setup
-SHOP_BNB_ADDRESS = "0000000000000000000"
-ROLE_ID = 00000000000000000000  # Replace with your actual role ID
+SHOP_BNB_ADDRESS = "000000000000000000000000000000000000"
+ROLE_ID = 000000000000000000  # Replace with your actual role ID
 ROLE_COST_GOLD = 5_000_000_000  # 5B Gold
-FISH_TO_GOLD_RATE = 25  # 1 fish = 25 gold
-WOOD_TO_GOLD_RATE = 50  # 1 wood = 50 gold
-ORE_TO_GOLD_RATE = 50   # 1 ore = 50 gold
+FISH_TO_GOLD_RATE = 155 # 1 fish = 25 gold
+WOOD_TO_GOLD_RATE = 155 # 1 wood = 50 gold
+ORE_TO_GOLD_RATE = 155  # 1 ore = 50 gold
 BNB_TO_GOLD_RATE = 10_000_000_000  # 1 BNB = 10B gold
 BNB_TO_GOLD_RATE_STR = f"{BNB_TO_GOLD_RATE // 1_000_000_000}B"
 
@@ -137,101 +136,342 @@ async def edit(ctx, member: discord.Member, field: str, value: int):
         await send_error_to_channel(ctx, str(e))
         await delete_user_command(ctx)
 
+# Unified monster data with custom emojis included
+MONSTERS = [
+    {
+        "name": "Goblin",
+        "gold": (50, 100),
+        "xp": (10, 20),
+        "description": "A sneaky goblin with a penchant for mischief!",
+        "weight": 30,  # 30% chance
+        "emoji": "👹"
+    },
+    {
+        "name": "Orc",
+        "gold": (100, 200),
+        "xp": (15, 30),
+        "description": "A brutish orc with a mean streak and a big club.",
+        "weight": 30,  # 30% chance
+        "emoji": "👺"
+    },
+    {
+        "name": "Troll",
+        "gold": (150, 300),
+        "xp": (20, 35),
+        "description": "A towering troll that regenerates its wounds.",
+        "weight": 20,  # 20% chance
+        "emoji": "👾"
+    },
+    {
+        "name": "Wraith",
+        "gold": (200, 400),
+        "xp": (25, 40),
+        "description": "A ghostly wraith that drains the life force of the living.",
+        "weight": 15,  # 15% chance
+        "emoji": "👻"
+    },
+    {
+        "name": "Dragon",
+        "gold": (300, 500),
+        "xp": (30, 50),
+        "description": "A fearsome dragon with scales as hard as steel.",
+        "weight": 5,  # 5% chance
+        "emoji": "🐉"
+    }
+]
+
+def weighted_random_choice(monsters):
+    total_weight = sum(monster['weight'] for monster in monsters)
+    random_weight = random.uniform(0, total_weight)
+    cumulative_weight = 0
+    for monster in monsters:
+        cumulative_weight += monster['weight']
+        if random_weight <= cumulative_weight:
+            return monster
+
 @bot.command(name="hunt")
 async def hunt(ctx):
     try:
         user_id = ctx.author.id
-        gold = random.randint(50, 500)
-        xp = random.randint(8, 36)
-        add_xp(user_id, xp)
+
+        # Choose a monster based on weights
+        monster = weighted_random_choice(MONSTERS)
+        gold_reward = random.randint(*monster["gold"])
+        xp_reward = random.randint(*monster["xp"])
+
+        # Update user's XP and gold
+        add_xp(user_id, xp_reward)
         data = get_user_data(user_id)
-        data["gold"] += gold
+        data["gold"] += gold_reward
         update_user_data(user_id, data)
+        update_user_stats(user_id, {'monsters': 1})
+
+        # Create the embed message
         embed = discord.Embed(
-            title="🏹 Hunt Result",
-            description=f"You hunted a monster and received **{gold}** gold!\n"
-                        f"XP: **{data['xp']}/{data['level']*100}** (Level {data['level']})\n"
-                        f"**{xp}** XP gained!",
-            color=0x00ff00
+            title=f"{monster['emoji']} Hunt Result",
+            color=0x8B0000  # Dark red color for hunting
         )
-        await ctx.send(embed=embed)
+        
+        embed.add_field(
+            name="Monster Defeated",
+            value=f"{ctx.author.mention} defeated a **{monster['name']}** {monster['emoji']}!\n{monster['description']}",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="Experience Gained",
+            value=f"**{xp_reward}** XP",
+            inline=True
+        )
+        
+        embed.add_field(
+            name="Total XP",
+            value=f"**{data['xp']}/{data['level']*100}** XP (Level {data['level']})",
+            inline=True
+        )
+        
+        embed.add_field(
+            name="Gold Received",
+            value=f"**{gold_reward}** 💰 Gold",
+            inline=False
+        )
+        
+        # Optional: Replace with your monster image URL
+        embed.set_thumbnail(url="https://example.com/monster_image.png")
+        embed.set_footer(text="Keep hunting to earn more rewards!")
+        
+        # Send the embed message
+        await ctx.send(embed=embed, delete_after=30)
+        
+        # Delete the user's command message immediately
         await delete_user_command(ctx)
     except Exception as e:
         await send_error_to_channel(ctx, str(e))
+
 
 @bot.command(name="fish")
 async def fish(ctx):
     try:
         user_id = ctx.author.id
-        fish = random.choice(["🐟 Salmon", "🐠 Trout", "🐡 Tuna"])
-        xp = random.randint(8, 36)
+
+        # Define fish types with their respective XP rewards and custom emojis
+        fish_rewards = {
+            "🐟 Salmon": {"xp": random.randint(8, 15), "emoji": "🐟"},
+            "🐠 Trout": {"xp": random.randint(8, 20), "emoji": "🐠"},
+            "🐡 Tuna": {"xp": random.randint(10, 30), "emoji": "🐡"},
+            "🦈 Shark": {"xp": random.randint(15, 35), "emoji": "🦈"},
+            "🐳 Whale": {"xp": random.randint(20, 50), "emoji": "🐳"}
+        }
+
+        # Choose a fish based on the defined probabilities
+        fish = random.choices(
+            population=list(fish_rewards.keys()),
+            weights=[30, 30, 20, 15, 5],  # Adjust these weights for probability distribution
+            k=1
+        )[0]
+        
+        # Get the XP and emoji for the selected fish
+        xp = fish_rewards[fish]["xp"]
+        fish_emoji = fish_rewards[fish]["emoji"]
+
+        # Update user data with XP and fish count
         add_xp(user_id, xp)
         data = get_user_data(user_id)
         data["fish"] += 1
         update_user_data(user_id, data)
+        update_user_stats(user_id, {'fish': 1})
+
+        # Create and send the embed message
         embed = discord.Embed(
-            title="🎣 Fishing Result",
-            description=f"You caught a {fish}!\n"
-                        f"XP: **{data['xp']}/{data['level']*100}** (Level {data['level']})\n"
-                        f"**{xp}** XP gained!",
-            color=0x00ff00
+            title=f"{fish_emoji} Fishing Result",
+            description=f"You caught a **{fish}** {fish_emoji}!",
+            color=0x1E90FF  # Dodger blue color for fishing
         )
-        await ctx.send(embed=embed)
+        
+        embed.add_field(
+            name="Experience Gained",
+            value=f"**{xp}** XP",
+            inline=True
+        )
+        
+        embed.add_field(
+            name="Total XP",
+            value=f"**{data['xp']}/{data['level']*100}** XP (Level {data['level']})",
+            inline=True
+        )
+        
+        embed.add_field(
+            name="Fish Caught",
+            value=f"**{data['fish']}** fish caught in total!",
+            inline=False
+        )
+        
+        embed.set_thumbnail(url="https://example.com/fish_image.png")  # Replace with your fish image URL
+        embed.set_footer(text="Keep fishing to catch more rare fish!")
+
+        await ctx.send(embed=embed, delete_after=30)
+        
+
+        # Delete the user's command message immediately
         await delete_user_command(ctx)
+        
     except Exception as e:
         await send_error_to_channel(ctx, str(e))
+
 
 @bot.command(name="chop")
 async def chop(ctx):
     try:
+        await ctx.message.delete()
         user_id = ctx.author.id
-        wood = random.choice(["🌳 Oak", "🌲 Pine", "🍁 Maple"])
-        xp = random.randint(8, 36)
+
+        # Define the types of wood, their probabilities, and the XP they give
+        wood_types = {
+            "🌳 Oak": {"chance": 50, "xp": (8, 16)},    # 50% chance, 8-16 XP
+            "🌲 Pine": {"chance": 30, "xp": (16, 24)},   # 30% chance, 16-24 XP
+            "🍁 Maple": {"chance": 15, "xp": (24, 32)},  # 15% chance, 24-32 XP
+            "🌴 Mahogany": {"chance": 4, "xp": (32, 40)},  # 4% chance, 32-40 XP
+            "🎋 Bamboo": {"chance": 1, "xp": (40, 50)}   # 1% chance, 40-50 XP
+        }
+
+        # Choose the wood based on the defined probabilities
+        wood = random.choices(list(wood_types.keys()), weights=[wood["chance"] for wood in wood_types.values()], k=1)[0]
+
+        # Calculate XP gained based on the type of wood
+        xp = random.randint(*wood_types[wood]["xp"])
         add_xp(user_id, xp)
+
+        # Update the user's data
         data = get_user_data(user_id)
         data["wood"] += 1
         update_user_data(user_id, data)
+        update_user_stats(user_id, {'wood': 1})
+
+        # Create and send the embed message
         embed = discord.Embed(
-            title="🪓 Chopping Result",
-            description=f"You chopped some {wood} wood!\n"
-                        f"XP: **{data['xp']}/{data['level']*100}** (Level {data['level']})\n"
-                        f"**{xp}** XP gained!",
-            color=0x00ff00
+            title=f"🪓 Chopping Result",
+            color=0x8B4513  # A brownish color for chopping wood
         )
-        await ctx.send(embed=embed)
-        await delete_user_command(ctx)
+
+        embed.add_field(
+            name="Wood Chopped",
+            value=f"You chopped some **{wood}** wood!",
+            inline=False
+        )
+
+        embed.add_field(
+            name="Experience Gained",
+            value=f"**{xp}** XP",
+            inline=True
+        )
+
+        embed.add_field(
+            name="Total XP",
+            value=f"**{data['xp']}/{data['level']*100}** XP (Level {data['level']})",
+            inline=True
+        )
+
+        embed.set_thumbnail(url="https://example.com/wood_image.png")  # Replace with your wood image URL
+        embed.set_footer(text="Keep chopping to earn more rewards!")
+
+        message = await ctx.send(embed=embed)
+
+        # Automatically delete the message after 30 seconds
+        await asyncio.sleep(20)
+        await message.delete()
+
     except Exception as e:
         await send_error_to_channel(ctx, str(e))
+
+
+
 
 @bot.command(name="mine")
 async def mine(ctx):
     try:
         user_id = ctx.author.id
-        ore = random.choice(["⛏️ Iron", "🔨 Gold", "💎 Diamond"])
-        xp = random.randint(8, 36)
-        add_xp(user_id, xp)
+        
+        # Define the ore types with their respective XP or gold rewards
+        ore_rewards = {
+            "<:stone:1242707938523615273> Iron": {"xp": random.randint(8, 18), "gold": 0},
+            "<:gold:1242708201732964382> Gold": {"xp": 25, "gold": random.randint(51, 158)},  # Replace with your custom emoji ID
+            "💎 Diamond": {"xp": random.randint(29, 36), "gold": 0}
+        }
+        
+        # Randomly choose an ore and get its rewards
+        ore = random.choices(
+            population=list(ore_rewards.keys()),
+            weights=[50, 30, 20],  # Adjust these weights for probability distribution
+            k=1
+        )[0]
+        xp = ore_rewards[ore]["xp"]
+        gold_reward = ore_rewards[ore]["gold"]
+
+        # Update user's XP and ore count or gold
+        if xp > 0:
+            add_xp(user_id, xp)
+        if gold_reward > 0:
+            data = get_user_data(user_id)
+            data["gold"] += gold_reward
+            update_user_data(user_id, data)
+
+        # Update ore count
         data = get_user_data(user_id)
         data["ore"] += 1
         update_user_data(user_id, data)
+        update_user_stats(user_id, {'ore': 1})
+        
+        # Create the embed message
         embed = discord.Embed(
             title="🛠️ Mining Result",
-            description=f"You mined some {ore} ore!\n"
-                        f"XP: **{data['xp']}/{data['level']*100}** (Level {data['level']})\n"
-                        f"**{xp}** XP gained!",
-            color=0x00ff00
+            color=0xFFD700  # Gold color
         )
-        await ctx.send(embed=embed)
+        
+        embed.add_field(
+            name="Ore Mined",
+            value=f"{ore}",
+            inline=False
+        )
+        
+        if xp > 0:
+            embed.add_field(
+                name="Experience Gained",
+                value=f"**{xp}** XP",
+                inline=True
+            )
+            embed.add_field(
+                name="Total XP",
+                value=f"**{data['xp']}/{data['level']*100}** XP (Level {data['level']})",
+                inline=True
+            )
+        
+        if gold_reward > 0:
+            embed.add_field(
+                name="Gold Received",
+                value=f"**{gold_reward}** 💰 Gold",
+                inline=False
+            )
+        
+        embed.set_thumbnail(url="https://example.com/ore_image.png")  # Replace with your ore image URL
+        embed.set_footer(text="Keep mining to earn more rewards!")
+        
+        # Send the embed message
+        await ctx.send(embed=embed, delete_after=20)
+        
+        # Delete the user's command message immediately
         await delete_user_command(ctx)
     except Exception as e:
         await send_error_to_channel(ctx, str(e))
+
+
 
 @bot.command(name="bet")
 async def bet(ctx, game: str, amount: int):
     try:
         if game.lower() == 'bj':
             await blackjack(ctx, amount)
-        elif game.lower() == 'hi_low':
-            await hi_low(ctx, amount)
+        elif game.lower() == 'hl':
+            await hl(ctx, amount)
         elif game.lower() == 'dice':
             await dice(ctx, amount)
     except Exception as e:
@@ -276,6 +516,13 @@ class BlackjackView(View):
     def update_scores(self):
         self.player_score = sum(self.player_hand)
         self.dealer_score = sum(self.dealer_hand)
+        self.adjust_for_ace(self.player_hand)
+        self.adjust_for_ace(self.dealer_hand)
+
+    def adjust_for_ace(self, hand):
+        """Adjusts score for Ace being either 1 or 11."""
+        while sum(hand) > 21 and 11 in hand:
+            hand[hand.index(11)] = 1
 
     async def reward_gold(self, interaction, win=False, blackjack=False, tie=False):
         try:
@@ -329,7 +576,8 @@ class BlackjackView(View):
             if interaction.user.id != self.player_id:
                 await interaction.response.send_message("This game is not for you!", ephemeral=True)
                 return
-            while self.dealer_score < 17:
+            # Dealer hits until they reach at least 17, but stops hitting at 16 to make it easier for the player.
+            while self.dealer_score < 16:
                 self.dealer_hand.append(self.deck.pop())
                 self.update_scores()
             if self.dealer_score > 21 or self.player_score > self.dealer_score:
@@ -356,7 +604,8 @@ class BlackjackView(View):
             embed.add_field(name="Result", value=result, inline=False)
         return embed
 
-async def hi_low(ctx, amount):
+
+async def hl(ctx, amount):
     try:
         user_id = ctx.author.id
         data = get_user_data(user_id)
@@ -535,36 +784,167 @@ async def profile(ctx, member: discord.Member = None):
 async def bag(ctx, member: discord.Member = None):
     try:
         user = member or ctx.author
-        data = get_user_data(user.id)
+        user_data = get_user_data(user.id)
+        stats_data = get_user_stats(user.id)
+
+        # Create an embed with current resources and totals
         embed = discord.Embed(
-            title=f"{user.name}'s Bag",
-            description=f"**Fish**: {data['fish']} 🐟\n"
-                        f"**Wood**: {data['wood']} 🌲\n"
-                        f"**Ore**: {data['ore']} ⛏️",
+            title=f"🎒 {user.name}'s Bag",
+            description="Here are your current resources and total stats:",
             color=0x00ff00
         )
+
+        # Current resources in the user's bag
+        embed.add_field(
+            name="Current Fish",
+            value=f"🐟 **{user_data['fish']}** fish",
+            inline=False
+        )
+
+        embed.add_field(
+            name="Current Wood",
+            value=f"🌲 **{user_data['wood']}** wood",
+            inline=False
+        )
+
+        embed.add_field(
+            name="Current Ore",
+            value=f"⛏️ **{user_data['ore']}** ore",
+            inline=False
+        )
+
+        # Total stats from stats_data
+        embed.add_field(
+            name="Total Fish Caught",
+            value=f"🐟 **{stats_data['fish']}** fish",
+            inline=False
+        )
+
+        embed.add_field(
+            name="Total Wood Chopped",
+            value=f"🌲 **{stats_data['wood']}** wood",
+            inline=False
+        )
+
+        embed.add_field(
+            name="Total Ore Mined",
+            value=f"⛏️ **{stats_data['ore']}** ore",
+            inline=False
+        )
+
+        embed.add_field(
+            name="Total Monsters Hunted",
+            value=f"👹 **{stats_data['monsters']}** monsters",
+            inline=False
+        )
+
         embed.set_thumbnail(url=user.avatar.url)
+        embed.set_footer(text="Keep collecting and hunting to increase your totals!")
+
         await ctx.send(embed=embed)
         await delete_user_command(ctx)
     except Exception as e:
         await send_error_to_channel(ctx, str(e))
 
-@bot.command(name="buy_troops")
-async def buy_troops(ctx, amount: int):
+
+
+from discord.ui import View, Button
+
+@bot.command(name="troops")
+async def buy_troops(ctx):
     try:
         user_id = ctx.author.id
         data = get_user_data(user_id)
-        cost = amount * 10000
-        if data["gold"] >= cost:
-            data["gold"] -= cost
-            data["troops"] += amount
-            update_user_data(user_id, data)
-            await ctx.send(f"You bought {amount} troops for {cost} gold.")
-        else:
-            await ctx.send("You don't have enough gold to buy that many troops.")
+        troop_cost = 10000  # Cost per troop
+
+        # Create an embed showing the cost of troops
+        embed = discord.Embed(
+            title="🛡️ Buy Troops",
+            description=f"Each troop costs **{troop_cost}** gold.\n\nHow many troops would you like to buy?",
+            color=0x00ff00
+        )
+        embed.add_field(name="Your Gold", value=f"**{data['gold']}** gold", inline=False)
+        embed.set_footer(text="Type the number of troops you want to buy or click Cancel to stop.")
+
+        # Create the view for buttons
+        class TroopPurchaseView(View):
+            def __init__(self):
+                super().__init__(timeout=30)
+                self.cancelled = False
+
+            @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red)
+            async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+                if interaction.user.id != ctx.author.id:
+                    await interaction.response.send_message("This action is not for you!", ephemeral=True)
+                    return
+
+                self.cancelled = True
+                cancel_embed = discord.Embed(
+                    title="❌ Purchase Cancelled",
+                    description="You have cancelled the purchase of troops.",
+                    color=0xff0000
+                )
+                await interaction.response.edit_message(embed=cancel_embed, view=None)
+                self.stop()
+
+        view = TroopPurchaseView()
+
+        # Send the embed message with the view
+        instruction_message = await ctx.send(embed=embed, view=view)
+
+        def check(m):
+            return m.author == ctx.author and m.channel == ctx.channel and m.content.isdigit()
+
+        try:
+            # Wait for the user's response with the number of troops or for them to cancel
+            reply = await bot.wait_for('message', check=check, timeout=30.0)
+            amount = int(reply.content)
+            cost = amount * troop_cost
+
+            # Check if the user cancelled the purchase
+            if view.cancelled:
+                await reply.delete()
+                return
+
+            # Check if the user has enough gold
+            if data["gold"] >= cost:
+                data["gold"] -= cost
+                data["troops"] += amount
+                update_user_data(user_id, data)
+                confirmation_embed = discord.Embed(
+                    title="✅ Troops Purchased",
+                    description=f"You bought **{amount}** troops for **{cost}** gold.",
+                    color=0x00ff00
+                )
+                confirmation_embed.add_field(name="Remaining Gold", value=f"**{data['gold']}** gold", inline=False)
+                confirmation_embed.set_footer(text="Your troops are ready for battle!")
+            else:
+                confirmation_embed = discord.Embed(
+                    title="❌ Insufficient Gold",
+                    description=f"You don't have enough gold to buy **{amount}** troops. You need **{cost}** gold.",
+                    color=0xff0000
+                )
+
+            # Send the confirmation embed
+            await ctx.send(embed=confirmation_embed, delete_after=30)
+            await instruction_message.delete()
+            await reply.delete()
+
+        except asyncio.TimeoutError:
+            if not view.cancelled:  # Only show timeout if not cancelled
+                timeout_embed = discord.Embed(
+                    title="⏰ Time's Up!",
+                    description="You didn't respond in time. Please try the command again.",
+                    color=0xffa500
+                )
+                await ctx.send(embed=timeout_embed, delete_after=10)
+                await instruction_message.delete()
+
         await delete_user_command(ctx)
     except Exception as e:
         await send_error_to_channel(ctx, str(e))
+
+
 
 @bot.command(name="battle")
 async def battle(ctx, opponent: discord.Member, challenger_troops: int, gold: int):
@@ -595,7 +975,7 @@ async def battle(ctx, opponent: discord.Member, challenger_troops: int, gold: in
         # Define the button for troop selection
         class TroopSelectionView(View):
             def __init__(self, opponent, max_troops, challenger_id, opponent_id, challenger_troops, gold):
-                super().__init__()
+                super().__init__(timeout=30)  # Set timeout for 30 seconds
                 self.opponent = opponent
                 self.max_troops = max_troops
                 self.challenger_id = challenger_id
@@ -606,6 +986,77 @@ async def battle(ctx, opponent: discord.Member, challenger_troops: int, gold: in
 
             def set_initial_message(self, message):
                 self.initial_message = message
+
+            async def on_timeout(self):
+                # Called when the opponent doesn't respond within the timeout
+                npc_battle_embed = discord.Embed(
+                    title="⚔️ No Response",
+                    description=f"{self.opponent.mention} didn't respond in time. {ctx.author.mention}, do you want to battle an NPC instead?",
+                    color=0xFFA500
+                )
+                npc_battle_embed.set_footer(text="You have 30 seconds to accept or decline the NPC battle.")
+
+                class NPCBattleView(View):
+                    def __init__(self, challenger_id, challenger_troops, gold):
+                        super().__init__(timeout=30)
+                        self.challenger_id = challenger_id
+                        self.challenger_troops = challenger_troops
+                        self.gold = gold
+
+                    @discord.ui.button(label="Battle NPC", style=discord.ButtonStyle.green)
+                    async def battle_npc(self, interaction: discord.Interaction, button: discord.ui.Button):
+                        if interaction.user.id != self.challenger_id:
+                            await interaction.response.send_message("This NPC battle option is not for you!", ephemeral=True)
+                            return
+                        
+                        data = get_user_data(self.challenger_id)
+                        
+                        # 45% chance for the user to win the battle against the NPC
+                        if random.random() <= 0.45:
+                            # User wins
+                            win_gold = self.gold * 2  # Double the bet if user wins
+                            data["gold"] += win_gold
+                            data["wins"] += 1  # Update win count
+                            data["win_streak"] += 1  # Increment win streak
+
+                            # Deduct only a portion of the troops since the user won
+                            troops_lost = random.randint(1, self.challenger_troops // 2)
+                            data["troops"] -= troops_lost
+
+                            npc_win_embed = discord.Embed(
+                                title="🏆 NPC Battle Result",
+                                description=f"You won against the NPC!\n\n**Gold Gained:** {win_gold} 🪙\n**Troops Lost:** {troops_lost} 🪖",
+                                color=0x00FF00
+                            )
+                            await interaction.response.edit_message(embed=npc_win_embed, view=None)
+                        else:
+                            # User loses
+                            data["gold"] -= self.gold
+                            data["losses"] += 1  # Update loss count
+                            data["win_streak"] = 0  # Reset win streak
+
+                            # Deduct all troops since the user lost
+                            data["troops"] -= self.challenger_troops
+
+                            npc_lose_embed = discord.Embed(
+                                title="❌ NPC Battle Result",
+                                description=f"You lost against the NPC...\n\n**Gold Lost:** {self.gold} 🪙\n**Troops Lost:** {self.challenger_troops} 🪖",
+                                color=0xFF0000
+                            )
+                            await interaction.response.edit_message(embed=npc_lose_embed, view=None)
+
+                        # Update the user's data
+                        update_user_data(self.challenger_id, data)
+
+                    @discord.ui.button(label="Decline", style=discord.ButtonStyle.red)
+                    async def decline_npc(self, interaction: discord.Interaction, button: discord.ui.Button):
+                        if interaction.user.id != self.challenger_id:
+                            await interaction.response.send_message("This option is not for you!", ephemeral=True)
+                            return
+                        await interaction.message.delete()
+
+                npc_view = NPCBattleView(self.challenger_id, self.challenger_troops, self.gold)
+                await self.initial_message.edit(embed=npc_battle_embed, view=npc_view)
 
             @discord.ui.button(label="Select Troops", style=discord.ButtonStyle.primary)
             async def select_troops(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -781,6 +1232,17 @@ async def process_battle(interaction, challenger_id, opponent_id, challenger_tro
 
 
 
+class CloseButtonView(View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Close", style=discord.ButtonStyle.red)
+    async def close(self, interaction: discord.Interaction, button: discord.ui.Button):
+        try:
+            await interaction.message.delete()
+        except discord.errors.NotFound:
+            pass  # Handle case where message was already deleted
+
 @bot.command(name="commands")
 async def commands(ctx):
     embed = discord.Embed(
@@ -793,20 +1255,24 @@ async def commands(ctx):
     embed.add_field(name="!chop", value="Chop wood to earn XP.", inline=False)
     embed.add_field(name="!mine", value="Mine ores to earn XP.", inline=False)
     embed.add_field(name="!bet bj <amount>", value="Play a game of blackjack and bet gold.", inline=False)
-    embed.add_field(name="!bet hi_low <amount>", value="Play a Hi and Low guessing game and bet gold.", inline=False)
+    embed.add_field(name="!bet hl <amount>", value="Play a Hi and Low guessing game and bet gold.", inline=False)
     embed.add_field(name="!bet dice <amount>", value="Play a dice game and bet gold.", inline=False)
     embed.add_field(name="!profile [user]", value="View your profile or another user's profile.", inline=False)
     embed.add_field(name="!bag [user]", value="View your bag or another user's bag of resources.", inline=False)
-    embed.add_field(name="!buy_troops <amount>", value="Buy troops for battle.", inline=False)
+    embed.add_field(name="!buy_troops", value="Buy troops for battle.", inline=False)
     embed.add_field(name="!battle <user> <troops> <gold>", value="Challenge another user to a battle.", inline=False)
-    embed.add_field(name="!edit <user> <field> <value>", value="Edit user's attributes (admin only).", inline=False)
     embed.add_field(name="!shop", value="Open the shop to buy/sell resources and special roles.", inline=False)
     embed.add_field(name="!deposit", value="Generate a BNB deposit address.", inline=False)
     embed.add_field(name="!withdraw <amount> <address>", value="Withdraw BNB to an external address.", inline=False)
     embed.add_field(name="!bals", value="Check your BNB balance.", inline=False)
-    embed.add_field(name="!fee", value="Check the current BNB transaction fee.", inline=False)
+    embed.add_field(name="!fee <coin> <amount>", value="Check current BNB or BEP20 Token transaction fee.", inline=False)
     embed.add_field(name="!tip <user> <amount>", value="Tip another user in BNB.", inline=False)
-    await ctx.send(embed=embed)
+    embed.add_field(name="!airdrop <coin> <amount> <# of users>", value="Airdrop BEP20 Tokens to other users.", inline=False)
+    embed.add_field(name="!s <category> <suggestion>", value="Leave a suggestion for the admins to implement.", inline=False)
+    embed.add_field(name="!trivia", value="Start a trivia game with random questions and earn rewards.", inline=False)
+
+    view = CloseButtonView()  # Create the view with the close button
+    await ctx.send(embed=embed, view=view)
     await delete_user_command(ctx)
 
 @bot.command(name="shop")
@@ -1100,8 +1566,8 @@ async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
 
             embed = discord.Embed(
                 title="📤 Withdrawal Successful",
-                description=f"Transaction hash: [{tx_hash.hex()}](https://bscscan.com/tx/{tx_hash.hex()})\n"
-                            f"Fee transaction hash: [{fee_tx_hash.hex()}](https://bscscan.com/tx/{fee_tx_hash.hex()})",
+                description=f"Transaction hash: [{tx_hash.hex()}](https://example.com/tx/{tx_hash.hex()})\n"
+                            f"Fee transaction hash: [{fee_tx_hash.hex()}](https://example.com/tx/{fee_tx_hash.hex()})",
                 color=0x00ff00
             )
             await ctx.send(embed=embed)
@@ -1297,8 +1763,6 @@ async def fee(ctx, token: str = "BNB", amount: str = None):
         await send_error_to_channel(ctx, str(e))
 
 
-
-
 class ConfirmTipView(View):
     def __init__(self, user_id, member, amount, fee_bnb, token):
         super().__init__(timeout=60)
@@ -1333,8 +1797,8 @@ class ConfirmTipView(View):
 # A dictionary mapping token names to their contract addresses
 TOKEN_CONTRACTS = {
     'BNB': None,  # BNB is native to the BSC network, so no contract is needed
-    'CAKE': '000000000000000000000000000000000000000000',
-    'BUSD': '000000000000000000000000000000000000000000',
+    'CAKE': '0000000000000000000000000000000000000000000000',
+    'BUSD': '0000000000000000000000000000000000000000000000',
     # Add other tokens here...
 }
 
@@ -1464,7 +1928,6 @@ async def tip(ctx, member: discord.Member, amount: str, token: str = 'BNB'):
 
     except Exception as e:
         await send_error_to_channel(ctx, str(e))
-
 
 # Function to get token balance
 def get_token_balance(address, contract_address):
@@ -1671,7 +2134,7 @@ async def handle_auto_mine(ctx_or_interaction):
         await send_error_to_channel(ctx_or_interaction, str(e))
 
 # Define the role ID and cost
-ROLE_ID = 0000000000000000  # Replace with your actual role ID
+ROLE_ID = 000000000000000000# Replace with your actual role ID
 
 @bot.command(name="highroller")
 async def highroller(ctx):
@@ -1889,8 +2352,6 @@ async def leaderboard(ctx):
         await send_error_to_channel(ctx, str(e))
 
 
-
-
 # Predefined list of trivia questions grouped by category
 TRIVIA_QUESTIONS = {
     "General Knowledge": [
@@ -1905,9 +2366,9 @@ TRIVIA_QUESTIONS = {
             "correct_answer": "Mars"
         },
         {
-         "question": "Who Was Known as The King of Pop?",
+            "question": "Who was known as The King of Pop?",
             "options": ["Michael Jackson", "Justin Timberlake", "Prince", "Harry Styles"],
-            "correct_answer": "Michael Jackson"   
+            "correct_answer": "Michael Jackson"
         },
         # Add more General Knowledge questions here
     ],
@@ -2010,7 +2471,15 @@ async def trivia(ctx):
                 await trivia_message.delete()
                 await answer_message.delete()
 
-                if answer_message.content.lower() == correct_answer.lower():
+                user_answer = answer_message.content.strip().lower()
+
+                # Check if the user provided the correct answer or the correct option number
+                if user_answer.isdigit() and 1 <= int(user_answer) <= len(all_answers):
+                    user_answer_text = all_answers[int(user_answer) - 1].lower()
+                else:
+                    user_answer_text = user_answer
+
+                if user_answer_text == correct_answer.lower():
                     gold_reward = random.randint(100, 500)  # Random gold reward between 100 and 500
                     data["gold"] += gold_reward
                     data["wins"] += 1  # Increment wins for correct answer
@@ -2072,6 +2541,7 @@ async def trivia(ctx):
 
     except Exception as e:
         await send_error_to_channel(ctx, str(e))
+
 
 ## Format Tokens
 def format_bnb(amount):
@@ -2332,6 +2802,120 @@ async def airdrop(ctx, token: str, total_amount: float, winners: int):
 
     except Exception as e:
         await ctx.send(f"An error occurred: {e}")
+
+@bot.command(name="s")
+async def submit_suggestion(ctx, category: str, *, suggestion: str):
+    try:
+        # Validate the category
+        category = category.lower()
+        if category not in ["game", "wallet"]:
+            await ctx.send("Invalid category! Please use either 'game' or 'wallet'.", delete_after=10)
+            await ctx.message.delete()
+            return
         
+        # Delete the user's command message
+        await ctx.message.delete()
+
+        # Create the embed for the suggestion
+        embed = discord.Embed(
+            title="💡 New Suggestion",
+            description=suggestion,
+            color=0x00ff00
+        )
+        embed.add_field(name="Category", value=category.capitalize(), inline=False)
+        embed.add_field(name="Suggested by", value=ctx.author.mention, inline=False)
+        embed.set_footer(text=f"User ID: {ctx.author.id}")
+        embed.timestamp = ctx.message.created_at
+
+        # Use the new avatar method
+        if ctx.author.avatar:
+            embed.set_thumbnail(url=ctx.author.avatar.url)
+
+        # Send the suggestion to the Suggestions channel
+        suggestions_channel = bot.get_channel(1242646174662524990)  # Replace with your channel ID
+        await suggestions_channel.send(embed=embed)
+
+        # Send a confirmation message to the user
+        confirmation_message = await ctx.send("Thank you for your suggestion! It has been submitted.", delete_after=10)
+
+    except Exception as e:
+        await ctx.send(f"An error occurred: {e}", delete_after=10)
+
+
+import sqlite3
+
+def create_stats_database():
+    # Connect to a new SQLite database (this will create the file if it doesn't exist)
+    conn = sqlite3.connect('stats_database.db')
+    cursor = conn.cursor()
+
+    # Create a table for tracking stats if it doesn't exist
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_stats (
+        user_id INTEGER PRIMARY KEY,
+        total_fish INTEGER DEFAULT 0,
+        total_wood INTEGER DEFAULT 0,
+        total_ore INTEGER DEFAULT 0,
+        total_monsters INTEGER DEFAULT 0
+    )
+    """)
+
+    # Commit and close the connection
+    conn.commit()
+    conn.close()
+
+create_stats_database()
+
+
+def update_user_stats(user_id, new_stats):
+    conn = sqlite3.connect('stats_database.db')
+    cursor = conn.cursor()
+
+    # Ensure the user exists in the stats database
+    cursor.execute("INSERT OR IGNORE INTO user_stats (user_id) VALUES (?)", (user_id,))
+
+    # Update the user's stats
+    cursor.execute("""
+        UPDATE user_stats
+        SET total_fish = total_fish + ?,
+            total_wood = total_wood + ?,
+            total_ore = total_ore + ?,
+            total_monsters = total_monsters + ?
+        WHERE user_id = ?
+    """, (
+        new_stats.get('fish', 0),
+        new_stats.get('wood', 0),
+        new_stats.get('ore', 0),
+        new_stats.get('monsters', 0),
+        user_id
+    ))
+
+    conn.commit()
+    conn.close()
+
+def get_user_stats(user_id):
+    conn = sqlite3.connect('stats_database.db')
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT total_fish, total_wood, total_ore, total_monsters FROM user_stats WHERE user_id = ?", (user_id,))
+    row = cursor.fetchone()
+
+    conn.close()
+
+    if row:
+        return {
+            'fish': row[0],
+            'wood': row[1],
+            'ore': row[2],
+            'monsters': row[3]
+        }
+    else:
+        return {
+            'fish': 0,
+            'wood': 0,
+            'ore': 0,
+            'monsters': 0
+        }
+
 # Start the bot
 bot.run('')
