@@ -4,7 +4,7 @@
 
 This project is a comprehensive and dynamic Discord bot built using the discord.py library, integrated with the Binance Smart Chain (BSC) via web3.py for handling blockchain interactions. The bot offers various features, including a virtual economy, role management, and mini-games, along with smart contract integration for cryptocurrency transactions.
 
-## Features
+## Features 🪐
 
 **RPG Activities:** Users can engage in hunting, fishing, chopping wood, and mining to earn in-game resources and experience points.
 
@@ -20,7 +20,7 @@ This project is a comprehensive and dynamic Discord bot built using the discord.
 
 **Web3 Integration:** Users can generate BNB deposit addresses, check BNB balances, and transfer BNB or BEP-20 tokens to other users.
 
-## Setup Instructions
+## Setup Instructions ➕
 
 **Prerequisites**
 ```
@@ -33,7 +33,7 @@ SQLite3 (comes pre-installed with Python)
 Other Python libraries: asyncio, logging, json, random, time
 ```
 
-## Installation
+## Installation ➕
 
 **1. Clone the repository:**
 ```
@@ -55,9 +55,9 @@ python initialize_db.py
 python bot.py
 ```
 
-## Command Overview
+## Command Overview 📟
 
-**Adventure & Resource Gathering**
+**Adventure & Resource Gathering** 🏹
 
 - **!hunt:** Go hunting to earn gold and XP.
 
@@ -67,7 +67,7 @@ python bot.py
 
 - **!mine:** Mine ores to earn XP.
 
-**Economy Management**
+**Economy Management** 💸
 
 - **!profile [user]:** View your profile or another user's profile.
 
@@ -79,7 +79,7 @@ python bot.py
 
 - **!shop:** Open the shop to buy/sell resources and special roles.
 
-**Gambling & Games**
+**Gambling & Games** 🎲
 
 - **!bet bj [amount]:** Play a game of blackjack and bet gold.
 
@@ -89,7 +89,7 @@ python bot.py
 
 - **!trivia:** Start a trivia challenge.
 
-**Web3 Integration**
+**Web3 Integration** 💻
 
 - **!deposit:** Generate a BNB deposit address.
 
@@ -105,16 +105,16 @@ python bot.py
 
 - **!lb:** View the leaderboard.
 
-**Administration**
+**Administration** 🏛️
 
 - **!edit [user] [field] [value]:** - Edit a user's data (Admin only).
 - **!prune [number]:** - Delete a specified number of messages (Admin only).
 
-**Miscellaneous**
+**Miscellaneous** 🖇️
 
 - **!s <category> <suggestion>:** - Submit a suggestion to the admins.
 
-## Database Structure
+## Database Structure 🌐
 
 **user_data.db**
 - users: Stores user profiles, including levels, XP, gold, resources, and Web3 information.
@@ -122,7 +122,7 @@ python bot.py
 **stats_database.db**
 - user_stats: Tracks cumulative stats such as total fish caught, wood chopped, ore mined, and monsters defeated.
 
-## Database Schema
+## Database Schema #1 🌐
 
 - **user_id:** Discord user ID (Primary Key)
 
@@ -152,11 +152,23 @@ python bot.py
 
 - **bnb_balance:** User's BNB balance
 
-## Web3 Integration
+## Database Schema #2 🌐
+
+- **user_id:** This is the primary key, uniquely identifying each user. It's typically the Discord user ID.
+
+- **total_fish:** This column keeps a cumulative count of how many fish the user has caught.
+
+- **total_wood:** This column tracks the total amount of wood the user has chopped.
+
+- **total_ore:** This column stores the total amount of ore the user has mined.
+
+- **total_monsters:** This column holds the total number of monsters the user has defeated.
+
+## Web3 Integration 🌐
 
 The bot connects to the Binance Smart Chain via Web3, allowing users to manage BNB and BEP-20 token balances, perform transactions, and interact with smart contracts.
 
-## Supported Tokens
+## Supported Tokens 🪙
 
 - BNB
 - CAKE
@@ -168,11 +180,11 @@ The bot connects to the Binance Smart Chain via Web3, allowing users to manage B
 - LINK
 - UNI
 
-## Error Handling
+## Error Handling 🛑
 
 The bot includes error handling mechanisms to log and report issues to a designated Discord channel, ensuring smooth operation and quick troubleshooting.
 
-## Security Considerations
+## Security Considerations 🚨
 
 **Private Keys:** The bot stores BNB private keys for users. Ensure these are securely handled and never exposed in logs or outputs.
 
@@ -186,7 +198,7 @@ This project is open-source and available under the MIT License.
 
 Contributions are welcome! Please open an issue or submit a pull request with any changes or enhancements.
 
-## Support
+## Support 🙏
 
 For issues or feature requests, please submit a ticket on the GitHub repository.
 
