@@ -59,60 +59,60 @@ python bot.py
 
 **Adventure & Resource Gathering**
 
-**!hunt:** Go hunting to earn gold and XP.
+- **!hunt:** Go hunting to earn gold and XP.
 
-**!fish:** Catch fish to earn XP.
+- **!fish:** Catch fish to earn XP.
 
-**!chop:** Chop wood to earn XP.
+- **!chop:** Chop wood to earn XP.
 
-**!mine:** Mine ores to earn XP.
+- **!mine:** Mine ores to earn XP.
 
 **Economy Management**
 
-**!profile [user]:** View your profile or another user's profile.
+- **!profile [user]:** View your profile or another user's profile.
 
-**!bag [user]:** View your resource bag or another user's bag.
+- **!bag [user]:** View your resource bag or another user's bag.
 
-**!troops:** Buy troops for battle.
+- **!troops:** Buy troops for battle.
 
-**!battle [user] [troops] [gold]:** Challenge another user to a battle.
+- **!battle [user] [troops] [gold]:** Challenge another user to a battle.
 
-**!shop:** Open the shop to buy/sell resources and special roles.
+- **!shop:** Open the shop to buy/sell resources and special roles.
 
 **Gambling & Games**
 
-**!bet bj [amount]:** Play a game of blackjack and bet gold.
+- **!bet bj [amount]:** Play a game of blackjack and bet gold.
 
-**!bet hl [amount]:** Play a high-low guessing game and bet gold.
+- **!bet hl [amount]:** Play a high-low guessing game and bet gold.
 
-**!bet dice <amount>:** - Play a dice game and bet gold.
+- **!bet dice <amount>:** - Play a dice game and bet gold.
 
-**!trivia:** Start a trivia challenge.
+- **!trivia:** Start a trivia challenge.
 
 **Web3 Integration**
 
-**!deposit:** Generate a BNB deposit address.
+- **!deposit:** Generate a BNB deposit address.
 
-**!withdraw [amount] [address]:** Withdraw BNB.
+- **!withdraw [amount] [address]:** Withdraw BNB.
 
-**!bals:** Check your BNB and token balances.
+- **!bals:** Check your BNB and token balances.
 
-**!fee:** Check the current BNB transaction fee.
+- **!fee:** Check the current BNB transaction fee.
 
-**!tip [user] [amount]:** Tip another user in BNB or other supported tokens.
+- **!tip [user] [amount]:** Tip another user in BNB or other supported tokens.
 
-**!airdrop [token] [amount] [#]:** Airdrop tokens to specified # of users. 
+- **!airdrop [token] [amount] [#]:** Airdrop tokens to specified # of users. 
 
-**!lb:** View the leaderboard.
+- **!lb:** View the leaderboard.
 
 **Administration**
 
-**!edit [user] [field] [value]:** - Edit a user's data (Admin only).
-**!prune [number]:** - Delete a specified number of messages (Admin only).
+- **!edit [user] [field] [value]:** - Edit a user's data (Admin only).
+- **!prune [number]:** - Delete a specified number of messages (Admin only).
 
 **Miscellaneous**
 
-**!s <category> <suggestion>:** - Submit a suggestion to the admins.
+- **!s <category> <suggestion>:** - Submit a suggestion to the admins.
 
 ## Database Structure
 
@@ -124,33 +124,33 @@ python bot.py
 
 ## Database Schema
 
-**user_id:** Discord user ID (Primary Key)
+- **user_id:** Discord user ID (Primary Key)
 
-**level:** User level
+- **level:** User level
 
-**xp:** Experience points
+- **xp:** Experience points
 
-**gold:** Gold balance
+- **gold:** Gold balance
 
-**win_streak:** Current win streak
+- **win_streak:** Current win streak
 
-**wins:** Number of wins
+- **wins:** Number of wins
 
-**losses:** Number of losses
+- **losses:** Number of losses
 
-**troops:** Number of troops owned
+- **troops:** Number of troops owned
 
-**fish:** Amount of fish collected
+- **fish:** Amount of fish collected
 
-**wood:** Amount of wood collected
+- **wood:** Amount of wood collected
 
-**ore:** Amount of ore collected
+- **ore:** Amount of ore collected
 
-**bnb_address:** User's BNB deposit address
+- **bnb_address:** User's BNB deposit address
 
-**bnb_private_key:** User's BNB private key
+- **bnb_private_key:** User's BNB private key
 
-**bnb_balance:** User's BNB balance
+- **bnb_balance:** User's BNB balance
 
 ## Web3 Integration
 
