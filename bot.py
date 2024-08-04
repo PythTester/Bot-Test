@@ -855,15 +855,15 @@ async def buy_troops(ctx):
     try:
         user_id = ctx.author.id
         data = get_user_data(user_id)
-        troop_cost = 10000  # Cost per troop
+        troop_cost = 3  # Cost per troop in fish, wood, and ore
 
         # Create an embed showing the cost of troops
         embed = discord.Embed(
             title="🛡️ Buy Troops",
-            description=f"Each troop costs **{troop_cost}** gold.\n\nHow many troops would you like to buy?",
+            description=f"Each troop costs **{troop_cost} Fish, {troop_cost} Wood, and {troop_cost} Ore**.\n\nHow many troops would you like to buy?",
             color=0x00ff00
         )
-        embed.add_field(name="Your Gold", value=f"**{data['gold']}** gold", inline=False)
+        embed.add_field(name="Your Resources", value=f"**Fish:** {data['fish']} 🐟\n**Wood:** {data['wood']} 🌲\n**Ore:** {data['ore']} ⛏️", inline=False)
         embed.set_footer(text="Type the number of troops you want to buy or click Cancel to stop.")
 
         # Create the view for buttons
@@ -899,31 +899,45 @@ async def buy_troops(ctx):
             # Wait for the user's response with the number of troops or for them to cancel
             reply = await bot.wait_for('message', check=check, timeout=30.0)
             amount = int(reply.content)
-            cost = amount * troop_cost
+            total_fish = amount * troop_cost
+            total_wood = amount * troop_cost
+            total_ore = amount * troop_cost
 
             # Check if the user cancelled the purchase
             if view.cancelled:
                 await reply.delete()
                 return
 
-            # Check if the user has enough gold
-            if data["gold"] >= cost:
-                data["gold"] -= cost
+            # Check if the user has enough resources in user_data
+            if data["fish"] >= total_fish and data["wood"] >= total_wood and data["ore"] >= total_ore:
+                data["fish"] -= total_fish
+                data["wood"] -= total_wood
+                data["ore"] -= total_ore
                 data["troops"] += amount
                 update_user_data(user_id, data)
                 confirmation_embed = discord.Embed(
                     title="✅ Troops Purchased",
-                    description=f"You bought **{amount}** troops for **{cost}** gold.",
+                    description=f"You bought **{amount}** troops for **{total_fish} Fish, {total_wood} Wood, and {total_ore} Ore**.",
                     color=0x00ff00
                 )
-                confirmation_embed.add_field(name="Remaining Gold", value=f"**{data['gold']}** gold", inline=False)
+                confirmation_embed.add_field(name="Remaining Resources", value=f"**Fish:** {data['fish']} 🐟\n**Wood:** {data['wood']} 🌲\n**Ore:** {data['ore']} ⛏️", inline=False)
                 confirmation_embed.set_footer(text="Your troops are ready for battle!")
             else:
+                insufficient_resources = []
+                if data["fish"] < total_fish:
+                    insufficient_resources.append(f"**Fish:** Need {total_fish}, have {data['fish']}")
+                if data["wood"] < total_wood:
+                    insufficient_resources.append(f"**Wood:** Need {total_wood}, have {data['wood']}")
+                if data["ore"] < total_ore:
+                    insufficient_resources.append(f"**Ore:** Need {total_ore}, have {data['ore']}")
+
                 confirmation_embed = discord.Embed(
-                    title="❌ Insufficient Gold",
-                    description=f"You don't have enough gold to buy **{amount}** troops. You need **{cost}** gold.",
+                    title="❌ Insufficient Resources",
+                    description="You don't have enough resources to buy those troops.",
                     color=0xff0000
                 )
+                for resource in insufficient_resources:
+                    confirmation_embed.add_field(name="Resource Shortage", value=resource, inline=False)
 
             # Send the confirmation embed
             await ctx.send(embed=confirmation_embed, delete_after=30)
