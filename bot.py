@@ -847,7 +847,6 @@ async def bag(ctx, member: discord.Member = None):
         await send_error_to_channel(ctx, str(e))
 
 
-
 from discord.ui import View, Button
 
 @bot.command(name="troops")
