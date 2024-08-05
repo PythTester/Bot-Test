@@ -79,6 +79,8 @@ python bot.py
 
 - **!shop:** Open the shop to buy/sell resources and special roles.
 
+- **!daily:** Claim daily XP and Gold to speed up the process!
+
 **Gambling & Games** 🎲
 
 - **!bet bj [amount]:** Play a game of blackjack and bet gold.
