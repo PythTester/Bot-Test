@@ -2370,12 +2370,12 @@ TRIVIA_QUESTIONS = {
     "General Knowledge": [
         {
             "question": "What is the capital of France?",
-            "options": ["Paris", "London", "Berlin", "Rome"],
+            "options": ["Berlin", "London", "Paris", "Rome"],
             "correct_answer": "Paris"
         },
         {
             "question": "Which planet is known as the Red Planet?",
-            "options": ["Mars", "Earth", "Jupiter", "Venus"],
+            "options": ["Earth", "Mars", "Jupiter", "Venus"],
             "correct_answer": "Mars"
         },
         {
@@ -2383,12 +2383,58 @@ TRIVIA_QUESTIONS = {
             "options": ["Michael Jackson", "Justin Timberlake", "Prince", "Harry Styles"],
             "correct_answer": "Michael Jackson"
         },
+        {
+            "question": "Which country is known as the Land of the Rising Sun?",
+            "options": ["China", "South Korea", "Japan", "Thailand"],
+            "correct_answer": "Japan"
+        },
+        {
+            "question": "What is the largest island in the world?",
+            "options": ["Madagascar", "Iceland", "Australia", "Greenland"],
+            "correct_answer": "Greenland"
+        },
+        {
+            "question": "Which artist painted the ceiling of the Sistine Chapel?",
+            "options": ["Leonardo da Vinci", "Michelangelo", "Raphael", "Caravaggio"],
+            "correct_answer": "Michelangelo"
+        },
+        {
+            "question": "What is the tallest mountain in the world?",
+            "options": ["K2", "Kangchenjunga", "Mount Everest", "Lhotse"],
+            "correct_answer": "Mount Everest"
+        },
+        {
+            "question": "Who was the first person to fly solo across the Atlantic Ocean?",
+            "options": ["Wilbur Wright", "Amelia Earhart", "Howard Hughes", "Charles Lindbergh"],
+            "correct_answer": "Charles Lindbergh"
+        },
+        {
+            
+            "question": "Which country has the most natural lakes?",
+            "options": ["Finland", "United States", "Canada", "Russia"],
+            "correct_answer": "Canada"  
+        },
+        {
+            "question": "Which country is the largest producer of coffee in the world?",
+            "options": ["Colombia", "Brazil", "Ethiopia", "Vietnam"],
+            "correct_answer": "Brazil"
+        },
+        {
+            "question": "What does the “D” in D-Day stand for?",
+            "options": ["Departure", "Decision", "Deliverance", "Day"],
+            "correct_answer": "Day"
+        },
+        {
+            "question": "Who is the author of 'The Great Gatsby'?",
+            "options": ["Ernest Hemingway", "T.S. Eliot", "John Steinbeck", "F. Scott Fitzgerald"],
+            "correct_answer": "F. Scott Fitzgerald"
+        },
         # Add more General Knowledge questions here
     ],
     "Science": [
         {
-            "question": "What is the chemical symbol for water?",
-            "options": ["H2O", "O2", "CO2", "N2"],
+            "question": "Which country is the largest producer of coffee in the world?",
+            "options": ["CO2", "O2", "H2O", "N2"],
             "correct_answer": "H2O"
         },
         {
@@ -2401,17 +2447,47 @@ TRIVIA_QUESTIONS = {
             "options": ["500M Miles", "14M Miles", "140M Miles", "1400M Miles"],
             "correct_answer": "140M Miles"
         },
+         {
+            "question": "What is the most abundant element in the universe?",
+            "options": ["Carbon", "Nitrogen", "Hydrogen", "Oxygen"],
+            "correct_answer": "Hydrogen"
+        },
+        {
+            "question": "What type of bond involves the sharing of electron pairs between atoms?",
+            "options": ["Metallic bond", "Covalent bond", "Ionic bond", "Hydrogen bond"],
+            "correct_answer": "Covalent bond" 
+        },
+        {
+            "question": "What is the chemical formula for methane?",
+            "options": ["NH₃", "CO₂", "H₂O", "CH₄"],
+            "correct_answer": "CH₄"
+        },
+        {
+            "question": "What is the hardest substance in the human body?",
+            "options": ["Bone", "Tooth enamel", "Cartilage", "Keratin"],
+            "correct_answer": "Tooth enamel"
+        },
+        {
+            "question": "What is the boiling point of water in Fahrenheit?",
+            "options": ["100°F", "180°F", "212°F", "220°F"],
+            "correct_answer": "212°F"
+        },
+        {
+            "question": "What is the study of the interactions between organisms and their environment called?",
+            "options": ["Botany", "Zoology", "Biology", "Ecology"],
+            "correct_answer": "Ecology"
+        },
         # Add more Science questions here
     ],
     "History": [
         {
             "question": "Who was the first President of the United States?",
-            "options": ["George Washington", "Thomas Jefferson", "Abraham Lincoln", "John Adams"],
+            "options": ["Thomas Jefferson", "George Washington", "Abraham Lincoln", "John Adams"],
             "correct_answer": "George Washington"
         },
         {
             "question": "What year did World War II end?",
-            "options": ["1945", "1939", "1941", "1950"],
+            "options": ["1941", "1939", "1945", "1950"],
             "correct_answer": "1945"
         },
         {
@@ -2419,6 +2495,47 @@ TRIVIA_QUESTIONS = {
             "options": ["121", "100", "116", "153"],
             "correct_answer": "116"
         },
+        {
+            "question": "What year did the Berlin Wall fall?",
+            "options": ["1987", "1991", "1989", "1993"],
+            "correct_answer": "1989"  
+        },
+        {
+            "question": "Who wrote the Communist Manifesto?",
+            "options": ["Vladimir Lenin", "Leon Trotsky", "Joseph Stalin", "Karl Marx and Friedrich Engels"],
+            "correct_answer": "Karl Marx and Friedrich Engels"
+        },
+        {
+            "question": "Which battle is considered the turning point of the American Revolutionary War?",
+            "options": ["The Battle of Bunker Hill", "The Battle of Saratoga", "The Battle of Yorktown", "The Battle of Lexington and Concord"],
+            "correct_answer": "The Battle of Saratoga"
+        },
+        {
+            "question": "What was the name of the first artificial Earth satellite, launched by the Soviet Union in 1957?",
+            "options": ["Soyuz", "Luna", "Vostok", "Sputnik"],
+            "correct_answer": "Sputnik"
+        },
+        {
+            "question": "What ancient civilization built the Machu Picchu complex in Peru?",
+            "options": ["The Aztecs", "The Incas", "The Mayans", "The Olmecs"],
+            "correct_answer": "The Incas"
+        },
+        {
+            "question": "What was the capital of the Byzantine Empire?",
+            "options": ["Rome", "Athens", "Constantinople", "Alexandria"],
+            "correct_answer": "Constantinople"
+        },
+        {
+            "question": "What was the name of the ship that brought the Pilgrims to America in 1620?",
+            "options": ["The Santa Maria", "The Pinta", "The Nina", "The Mayflower"],
+            "correct_answer": "The Mayflower"
+        },
+        {
+            "question": "In what year did the French Revolution begin?",
+            "options": ["1776", "1789", "1815", "1793"],
+            "correct_answer": "1789"
+        },
+
         # Add more History questions here
     ],
     # Add more categories and questions here
