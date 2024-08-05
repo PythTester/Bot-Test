@@ -118,10 +118,10 @@ python bot.py
 
 ## Database Structure 🌐
 
-**user_data.db**
+**your_data.db**
 - users: Stores user profiles, including levels, XP, gold, resources, and Web3 information.
 
-**stats_database.db**
+**your_database.db**
 - user_stats: Tracks cumulative stats such as total fish caught, wood chopped, ore mined, and monsters defeated.
 
 ## Database Schema #1 🌐
