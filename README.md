@@ -148,6 +148,8 @@ python bot.py
 
 - **ore:** Amount of ore collected
 
+- **last_daily:** Last daily timestamp
+
 - **bnb_address:** User's BNB deposit address
 
 - **bnb_private_key:** User's BNB private key
