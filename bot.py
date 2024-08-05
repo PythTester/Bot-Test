@@ -17,7 +17,7 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # Database setup
-conn = sqlite3.connect('user_data.db')
+conn = sqlite3.connect('your_data.db')
 c = conn.cursor()
 c.execute('''
     CREATE TABLE IF NOT EXISTS users (
@@ -55,7 +55,7 @@ ORE_TO_GOLD_RATE = 155  # 1 ore = 50 gold
 BNB_TO_GOLD_RATE = 10_000_000_000  # 1 BNB = 10B gold
 BNB_TO_GOLD_RATE_STR = f"{BNB_TO_GOLD_RATE // 1_000_000_000}B"
 
-def get_user_data(user_id):
+def get_your_data(user_id):
     c.execute('SELECT * FROM users WHERE user_id=?', (user_id,))
     row = c.fetchone()
     if row is None:
@@ -64,7 +64,7 @@ def get_user_data(user_id):
         return {"level": 1, "xp": 0, "gold": 0, "win_streak": 0, "wins": 0, "losses": 0, "troops": 0, "fish": 0, "wood": 0, "ore": 0, "bnb_address": None, "bnb_private_key": None, "bnb_balance": 0}
     return {"level": row[1], "xp": row[2], "gold": row[3], "win_streak": row[4], "wins": row[5], "losses": row[6], "troops": row[7], "fish": row[8], "wood": row[9], "ore": row[10], "bnb_address": row[11], "bnb_private_key": row[12], "bnb_balance": row[13]}
 
-def update_user_data(user_id, data):
+def update_your_data(user_id, data):
     c.execute('''
         UPDATE users
         SET level=?, xp=?, gold=?, win_streak=?, wins=?, losses=?, troops=?, fish=?, wood=?, ore=?, bnb_address=?, bnb_private_key=?, bnb_balance=?
@@ -73,12 +73,12 @@ def update_user_data(user_id, data):
     conn.commit()
 
 def add_xp(user_id, amount):
-    data = get_user_data(user_id)
+    data = get_your_data(user_id)
     data["xp"] += amount
     while data["xp"] >= data["level"] * 100:
         data["xp"] -= data["level"] * 100
         data["level"] += 1
-    update_user_data(user_id, data)
+    update_your_data(user_id, data)
 
 async def delete_message_after_delay(message, delay=30):
     await asyncio.sleep(delay)
@@ -110,7 +110,7 @@ async def on_command_error(ctx, error):
 async def edit(ctx, member: discord.Member, field: str, value: int):
     try:
         user_id = member.id
-        data = get_user_data(user_id)
+        data = get_your_data(user_id)
         
         if field not in data:
             await ctx.send("Invalid field.")
@@ -118,7 +118,7 @@ async def edit(ctx, member: discord.Member, field: str, value: int):
             return
         
         data[field] += value
-        update_user_data(user_id, data)
+        update_your_data(user_id, data)
         
         embed = discord.Embed(
             title="✅ User Data Edited",
@@ -201,9 +201,9 @@ async def hunt(ctx):
 
         # Update user's XP and gold
         add_xp(user_id, xp_reward)
-        data = get_user_data(user_id)
+        data = get_your_data(user_id)
         data["gold"] += gold_reward
-        update_user_data(user_id, data)
+        update_your_data(user_id, data)
         update_user_stats(user_id, {'monsters': 1})
 
         # Create the embed message
@@ -276,9 +276,9 @@ async def fish(ctx):
 
         # Update user data with XP and fish count
         add_xp(user_id, xp)
-        data = get_user_data(user_id)
+        data = get_your_data(user_id)
         data["fish"] += 1
-        update_user_data(user_id, data)
+        update_your_data(user_id, data)
         update_user_stats(user_id, {'fish': 1})
 
         # Create and send the embed message
@@ -342,9 +342,9 @@ async def chop(ctx):
         add_xp(user_id, xp)
 
         # Update the user's data
-        data = get_user_data(user_id)
+        data = get_your_data(user_id)
         data["wood"] += 1
-        update_user_data(user_id, data)
+        update_your_data(user_id, data)
         update_user_stats(user_id, {'wood': 1})
 
         # Create and send the embed message
@@ -411,14 +411,14 @@ async def mine(ctx):
         if xp > 0:
             add_xp(user_id, xp)
         if gold_reward > 0:
-            data = get_user_data(user_id)
+            data = get_your_data(user_id)
             data["gold"] += gold_reward
-            update_user_data(user_id, data)
+            update_your_data(user_id, data)
 
         # Update ore count
-        data = get_user_data(user_id)
+        data = get_your_data(user_id)
         data["ore"] += 1
-        update_user_data(user_id, data)
+        update_your_data(user_id, data)
         update_user_stats(user_id, {'ore': 1})
         
         # Create the embed message
@@ -480,7 +480,7 @@ async def bet(ctx, game: str, amount: int):
 async def blackjack(ctx, amount):
     try:
         user_id = ctx.author.id
-        data = get_user_data(user_id)
+        data = get_your_data(user_id)
         
         if data["gold"] < amount:
             await ctx.send("You don't have enough gold to bet that amount.")
@@ -488,7 +488,7 @@ async def blackjack(ctx, amount):
             return
 
         data["gold"] -= amount
-        update_user_data(user_id, data)
+        update_your_data(user_id, data)
 
         view = BlackjackView(ctx.author.id, amount)
         message = await ctx.send(embed=view.create_embed(), view=view)
@@ -526,10 +526,10 @@ class BlackjackView(View):
 
     async def reward_gold(self, interaction, win=False, blackjack=False, tie=False):
         try:
-            data = get_user_data(self.player_id)
+            data = get_your_data(self.player_id)
             if tie:
                 data["gold"] += self.bet_amount
-                update_user_data(self.player_id, data)
+                update_your_data(self.player_id, data)
                 await interaction.response.edit_message(embed=self.create_embed("It's a tie! You get your gold back."), view=None)
                 return
 
@@ -545,12 +545,12 @@ class BlackjackView(View):
                 if data["win_streak"] >= 5:
                     data["gold"] += 2000
                     bonus_msg += " **Streak bonus! You received an additional 2000 gold!**"
-                update_user_data(self.player_id, data)
+                update_your_data(self.player_id, data)
                 await interaction.response.edit_message(embed=self.create_embed(bonus_msg), view=None)
             else:
                 data["losses"] += 1
                 data["win_streak"] = 0
-                update_user_data(self.player_id, data)
+                update_your_data(self.player_id, data)
                 await interaction.response.edit_message(embed=self.create_embed("Dealer wins."), view=None)
         except Exception as e:
             await send_error_to_channel(interaction.message, str(e))
@@ -608,7 +608,7 @@ class BlackjackView(View):
 async def hl(ctx, amount):
     try:
         user_id = ctx.author.id
-        data = get_user_data(user_id)
+        data = get_your_data(user_id)
         
         if data["gold"] < amount:
             await ctx.send("You don't have enough gold to bet that amount.")
@@ -616,7 +616,7 @@ async def hl(ctx, amount):
             return
 
         data["gold"] -= amount
-        update_user_data(user_id, data)
+        update_your_data(user_id, data)
 
         number = random.randint(1, 100)
         view = HiLowView(ctx.author.id, number, amount)
@@ -653,7 +653,7 @@ class HiLowView(View):
                 await interaction.response.send_message("This game is not for you!", ephemeral=True)
                 return
             new_number = random.randint(1, 100)
-            data = get_user_data(self.player_id)
+            data = get_your_data(self.player_id)
             if (guess_higher and new_number > self.number) or (not guess_higher and new_number < self.number):
                 gold = self.bet_amount * 2
                 data["gold"] += gold
@@ -664,12 +664,12 @@ class HiLowView(View):
                     bonus_msg = f"You guessed correctly! The number was {new_number}. You won **{gold}** gold! **Streak bonus! You received an additional 2000 gold!**"
                 else:
                     bonus_msg = f"You guessed correctly! The number was {new_number}. You won **{gold}** gold!"
-                update_user_data(self.player_id, data)
+                update_your_data(self.player_id, data)
                 await interaction.response.edit_message(embed=self.create_embed(bonus_msg), view=None)
             else:
                 data["losses"] += 1
                 data["win_streak"] = 0
-                update_user_data(self.player_id, data)
+                update_your_data(self.player_id, data)
                 await interaction.response.edit_message(embed=self.create_embed(f"You guessed wrong! The number was {new_number}."), view=None)
             self.number = new_number
             self.stop()
@@ -690,7 +690,7 @@ class HiLowView(View):
 async def dice(ctx, amount):
     try:
         user_id = ctx.author.id
-        data = get_user_data(user_id)
+        data = get_your_data(user_id)
         
         if data["gold"] < amount:
             await ctx.send("You don't have enough gold to bet that amount.")
@@ -698,7 +698,7 @@ async def dice(ctx, amount):
             return
 
         data["gold"] -= amount
-        update_user_data(user_id, data)
+        update_your_data(user_id, data)
 
         view = DiceView(ctx.author.id, amount)
         message = await ctx.send(embed=view.create_embed(), view=view)
@@ -721,7 +721,7 @@ class DiceView(View):
                 return
             player_roll = random.randint(1, 6)
             bot_roll = random.randint(1, 6)
-            data = get_user_data(self.player_id)
+            data = get_your_data(self.player_id)
             if player_roll > bot_roll:
                 gold = self.bet_amount * 2
                 data["gold"] += gold
@@ -732,16 +732,16 @@ class DiceView(View):
                     bonus_msg = f"You rolled **{player_roll}**, I rolled **{bot_roll}**. You win! You won **{gold}** gold! **Streak bonus! You received an additional 2000 gold!**"
                 else:
                     bonus_msg = f"You rolled **{player_roll}**, I rolled **{bot_roll}**. You win! You won **{gold}** gold!"
-                update_user_data(self.player_id, data)
+                update_your_data(self.player_id, data)
                 await interaction.response.edit_message(embed=self.create_embed(bonus_msg), view=None)
             elif player_roll < bot_roll:
                 data["losses"] += 1
                 data["win_streak"] = 0
-                update_user_data(self.player_id, data)
+                update_your_data(self.player_id, data)
                 await interaction.response.edit_message(embed=self.create_embed(f"You rolled **{player_roll}**, I rolled **{bot_roll}**. I win!"), view=None)
             else:
                 data["gold"] += self.bet_amount
-                update_user_data(self.player_id, data)
+                update_your_data(self.player_id, data)
                 await interaction.response.edit_message(embed=self.create_embed(f"We both rolled **{player_roll}**. It's a tie! You get your gold back."), view=None)
         except Exception as e:
             await send_error_to_channel(interaction.message, str(e))
@@ -760,7 +760,7 @@ class DiceView(View):
 async def profile(ctx, member: discord.Member = None):
     try:
         user = member or ctx.author
-        data = get_user_data(user.id)
+        data = get_your_data(user.id)
         win_loss_ratio = data["wins"] / data["losses"] if data["losses"] > 0 else data["wins"]
         embed = discord.Embed(
             title=f"{user.name}'s Profile",
@@ -784,8 +784,8 @@ async def profile(ctx, member: discord.Member = None):
 async def bag(ctx, member: discord.Member = None):
     try:
         user = member or ctx.author
-        user_data = get_user_data(user.id)
-        stats_data = get_user_stats(user.id)
+        your_data = get_your_data(user.id)
+        your_data = get_user_stats(user.id)
 
         # Create an embed with current resources and totals
         embed = discord.Embed(
@@ -797,44 +797,44 @@ async def bag(ctx, member: discord.Member = None):
         # Current resources in the user's bag
         embed.add_field(
             name="Current Fish",
-            value=f"🐟 **{user_data['fish']}** fish",
+            value=f"🐟 **{your_data['fish']}** fish",
             inline=False
         )
 
         embed.add_field(
             name="Current Wood",
-            value=f"🌲 **{user_data['wood']}** wood",
+            value=f"🌲 **{your_data['wood']}** wood",
             inline=False
         )
 
         embed.add_field(
             name="Current Ore",
-            value=f"⛏️ **{user_data['ore']}** ore",
+            value=f"⛏️ **{your_data['ore']}** ore",
             inline=False
         )
 
-        # Total stats from stats_data
+        # Total stats from your_data
         embed.add_field(
             name="Total Fish Caught",
-            value=f"🐟 **{stats_data['fish']}** fish",
+            value=f"🐟 **{your_data['fish']}** fish",
             inline=False
         )
 
         embed.add_field(
             name="Total Wood Chopped",
-            value=f"🌲 **{stats_data['wood']}** wood",
+            value=f"🌲 **{your_data['wood']}** wood",
             inline=False
         )
 
         embed.add_field(
             name="Total Ore Mined",
-            value=f"⛏️ **{stats_data['ore']}** ore",
+            value=f"⛏️ **{your_data['ore']}** ore",
             inline=False
         )
 
         embed.add_field(
             name="Total Monsters Hunted",
-            value=f"👹 **{stats_data['monsters']}** monsters",
+            value=f"👹 **{your_data['monsters']}** monsters",
             inline=False
         )
 
@@ -853,7 +853,7 @@ from discord.ui import View, Button
 async def buy_troops(ctx):
     try:
         user_id = ctx.author.id
-        data = get_user_data(user_id)
+        data = get_your_data(user_id)
         troop_cost = 3  # Cost per troop in fish, wood, and ore
 
         # Create an embed showing the cost of troops
@@ -907,13 +907,13 @@ async def buy_troops(ctx):
                 await reply.delete()
                 return
 
-            # Check if the user has enough resources in user_data
+            # Check if the user has enough resources in your_data
             if data["fish"] >= total_fish and data["wood"] >= total_wood and data["ore"] >= total_ore:
                 data["fish"] -= total_fish
                 data["wood"] -= total_wood
                 data["ore"] -= total_ore
                 data["troops"] += amount
-                update_user_data(user_id, data)
+                update_your_data(user_id, data)
                 confirmation_embed = discord.Embed(
                     title="✅ Troops Purchased",
                     description=f"You bought **{amount}** troops for **{total_fish} Fish, {total_wood} Wood, and {total_ore} Ore**.",
@@ -964,8 +964,8 @@ async def battle(ctx, opponent: discord.Member, challenger_troops: int, gold: in
     try:
         challenger_id = ctx.author.id
         opponent_id = opponent.id
-        challenger_data = get_user_data(challenger_id)
-        opponent_data = get_user_data(opponent_id)
+        challenger_data = get_your_data(challenger_id)
+        opponent_data = get_your_data(opponent_id)
 
         # Check if the challenger has enough troops and gold
         if challenger_data["troops"] < challenger_troops:
@@ -1022,7 +1022,7 @@ async def battle(ctx, opponent: discord.Member, challenger_troops: int, gold: in
                             await interaction.response.send_message("This NPC battle option is not for you!", ephemeral=True)
                             return
                         
-                        data = get_user_data(self.challenger_id)
+                        data = get_your_data(self.challenger_id)
                         
                         # 45% chance for the user to win the battle against the NPC
                         if random.random() <= 0.45:
@@ -1059,7 +1059,7 @@ async def battle(ctx, opponent: discord.Member, challenger_troops: int, gold: in
                             await interaction.response.edit_message(embed=npc_lose_embed, view=None)
 
                         # Update the user's data
-                        update_user_data(self.challenger_id, data)
+                        update_your_data(self.challenger_id, data)
 
                     @discord.ui.button(label="Decline", style=discord.ButtonStyle.red)
                     async def decline_npc(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1150,8 +1150,8 @@ async def battle(ctx, opponent: discord.Member, challenger_troops: int, gold: in
 
 async def process_battle(interaction, challenger_id, opponent_id, challenger_troops, opponent_troops, gold):
     try:
-        challenger_data = get_user_data(challenger_id)
-        opponent_data = get_user_data(opponent_id)
+        challenger_data = get_your_data(challenger_id)
+        opponent_data = get_your_data(opponent_id)
 
         # Fetch the Discord member objects for the challenger and opponent
         challenger_member = await bot.fetch_user(challenger_id)
@@ -1208,8 +1208,8 @@ async def process_battle(interaction, challenger_id, opponent_id, challenger_tro
         loser_member = await bot.fetch_user(loser_id)
 
         # Update winner's and loser's data
-        winner_data = get_user_data(winner_id)
-        loser_data = get_user_data(loser_id)
+        winner_data = get_your_data(winner_id)
+        loser_data = get_your_data(loser_id)
 
         # Update the winner's troops to reflect only the surviving troops
         if winner_id == challenger_id:
@@ -1228,8 +1228,8 @@ async def process_battle(interaction, challenger_id, opponent_id, challenger_tro
         loser_data["win_streak"] = 0
         loser_data["gold"] -= gold
 
-        update_user_data(winner_id, winner_data)
-        update_user_data(loser_id, loser_data)
+        update_your_data(winner_id, winner_data)
+        update_your_data(loser_id, loser_data)
 
         # Announce the final result
         result_embed = discord.Embed(
@@ -1335,7 +1335,7 @@ class ShopView(View):
     async def sell_resource(self, interaction: discord.Interaction, resource, rate, emoji):
         try:
             user_id = interaction.user.id
-            data = get_user_data(user_id)
+            data = get_your_data(user_id)
             resource_amount = data[resource]
 
             if resource_amount <= 0:
@@ -1346,7 +1346,7 @@ class ShopView(View):
             data["gold"] += gold_earned
             data[resource] = 0  # Set resource to 0 after selling
 
-            update_user_data(user_id, data)
+            update_your_data(user_id, data)
 
             await interaction.response.send_message(f"You sold all your {emoji} {resource} and earned **{gold_earned}** gold!", ephemeral=True)
         except Exception as e:
@@ -1355,7 +1355,7 @@ class ShopView(View):
     async def buy_gold_with_bnb(self, interaction: discord.Interaction):
         try:
             user_id = interaction.user.id
-            data = get_user_data(user_id)
+            data = get_your_data(user_id)
 
             # Calculate the gas fee
             gas_price = w3.eth.gas_price  # Get the current gas price
@@ -1399,7 +1399,7 @@ class ShopView(View):
             tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
 
             # Update the user's balance in the database
-            update_user_data(user_id, data)
+            update_your_data(user_id, data)
 
             embed = discord.Embed(
                 title="💸 Gold Purchase Successful!",
@@ -1416,13 +1416,13 @@ class ShopView(View):
 async def deposit(ctx):
     try:
         user_id = ctx.author.id
-        data = get_user_data(user_id)
+        data = get_your_data(user_id)
 
         if data["bnb_address"] is None:
             account = Account.create()
             data["bnb_address"] = account.address
             data["bnb_private_key"] = account._private_key.hex()
-            update_user_data(user_id, data)
+            update_your_data(user_id, data)
 
         await ctx.author.send(f"Your BNB deposit address is: {data['bnb_address']}")
         await delete_user_command(ctx)
@@ -1472,7 +1472,7 @@ async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
         await ctx.message.delete()
 
         user_id = ctx.author.id
-        data = get_user_data(user_id)
+        data = get_your_data(user_id)
 
         token = token.upper()
 
@@ -1575,7 +1575,7 @@ async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
                 signed_fee_tx = w3.eth.account.sign_transaction(fee_tx, data["bnb_private_key"])
                 fee_tx_hash = w3.eth.send_raw_transaction(signed_fee_tx.rawTransaction)
 
-            update_user_data(user_id, data)
+            update_your_data(user_id, data)
 
             embed = discord.Embed(
                 title="📤 Withdrawal Successful",
@@ -1597,7 +1597,7 @@ async def withdraw(ctx, amount: float, address: str, token: str = 'BNB'):
 async def bals(ctx):
     try:
         user_id = ctx.author.id
-        data = get_user_data(user_id)
+        data = get_your_data(user_id)
 
         if data["bnb_address"] is None:
             await ctx.send("You don't have a BNB address. Use !deposit to generate one.")
@@ -1647,7 +1647,7 @@ async def bals(ctx):
 
         # Update the database with the new BNB balance
         data["bnb_balance"] = bnb_balance
-        update_user_data(user_id, data)
+        update_your_data(user_id, data)
 
         # Create the embed with all balances
         embed = discord.Embed(
@@ -1845,8 +1845,8 @@ async def tip(ctx, member: discord.Member, amount: str, token: str = 'BNB'):
             await delete_user_command(ctx)
             return
 
-        data = get_user_data(user_id)
-        recipient_data = get_user_data(recipient_id)
+        data = get_your_data(user_id)
+        recipient_data = get_your_data(recipient_id)
 
         if token == 'BNB':
             token_balance = data['bnb_balance']
@@ -1925,8 +1925,8 @@ async def tip(ctx, member: discord.Member, amount: str, token: str = 'BNB'):
                 update_token_balance(user_id, token, -amount)
                 update_token_balance(recipient_id, token, amount)
 
-            update_user_data(user_id, data)
-            update_user_data(recipient_id, recipient_data)
+            update_your_data(user_id, data)
+            update_your_data(recipient_id, recipient_data)
 
             confirmation_embed = discord.Embed(
                 title="🎉 Tip Successful",
@@ -1998,8 +1998,8 @@ async def raid(ctx, target: discord.Member):
                 return
 
         # Proceed with the raid if not on cooldown
-        raider_data = get_user_data(raider_id)
-        target_data = get_user_data(target_id)
+        raider_data = get_your_data(raider_id)
+        target_data = get_your_data(target_id)
 
         # Calculate the amount to raid (up to 30% of each resource)
         max_raid_percentage = 0.3
@@ -2020,8 +2020,8 @@ async def raid(ctx, target: discord.Member):
         raider_data["ore"] += ore_raid
 
         # Update both users' data in the database
-        update_user_data(raider_id, raider_data)
-        update_user_data(target_id, target_data)
+        update_your_data(raider_id, raider_data)
+        update_your_data(target_id, target_data)
 
         # Update the raid cooldown
         raid_cooldowns[(raider_id, target_id)] = current_time
@@ -2121,11 +2121,11 @@ async def handle_auto_mine(ctx_or_interaction):
             total_ore += ore_collected
 
             # Update the user's resources
-            data = get_user_data(user_id)
+            data = get_your_data(user_id)
             data["fish"] += fish_collected
             data["wood"] += wood_collected
             data["ore"] += ore_collected
-            update_user_data(user_id, data)
+            update_your_data(user_id, data)
 
             # Wait for 30 seconds before the next collection cycle
             await asyncio.sleep(30)
@@ -2153,7 +2153,7 @@ ROLE_ID = 000000000000000000# Replace with your actual role ID
 async def highroller(ctx):
     try:
         user_id = ctx.author.id
-        data = get_user_data(user_id)
+        data = get_your_data(user_id)
 
         # Check if the user has enough gold
         if data["gold"] < 5_000_000_000:
@@ -2190,7 +2190,7 @@ async def highroller(ctx):
 
         # Deduct gold and assign the role
         data["gold"] -= 5_000_000_000
-        update_user_data(user_id, data)
+        update_your_data(user_id, data)
         await ctx.author.add_roles(role)
 
         embed = discord.Embed(
@@ -2478,7 +2478,7 @@ async def trivia(ctx):
             try:
                 # Wait for the user's answer
                 answer_message = await bot.wait_for('message', check=check_answer, timeout=15.0)
-                data = get_user_data(ctx.author.id)
+                data = get_your_data(ctx.author.id)
 
                 # Delete the trivia question and user's answer
                 await trivia_message.delete()
@@ -2497,7 +2497,7 @@ async def trivia(ctx):
                     data["gold"] += gold_reward
                     data["wins"] += 1  # Increment wins for correct answer
                     data["win_streak"] += 1  # Increment win streak for correct answer
-                    update_user_data(ctx.author.id, data)
+                    update_your_data(ctx.author.id, data)
                     
                     # Correct Answer Embed
                     correct_embed = discord.Embed(
@@ -2515,7 +2515,7 @@ async def trivia(ctx):
                 else:
                     data["losses"] += 1  # Increment losses for incorrect answer
                     data["win_streak"] = 0  # Reset win streak on incorrect answer
-                    update_user_data(ctx.author.id, data)
+                    update_your_data(ctx.author.id, data)
 
                     # Incorrect Answer Embed
                     incorrect_embed = discord.Embed(
@@ -2633,7 +2633,7 @@ async def send_bnb_on_blockchain(sender_address, private_key, recipient_address,
 async def airdrop(ctx, token: str, total_amount: float, winners: int):
     try:
         user_id = ctx.author.id
-        data = get_user_data(user_id)  # Use the existing get_user_data function
+        data = get_your_data(user_id)  # Use the existing get_your_data function
 
         # Normalize the token input
         token = token.upper()
@@ -2752,8 +2752,8 @@ async def airdrop(ctx, token: str, total_amount: float, winners: int):
                             await interaction.response.send_message(f"🎉 You have claimed your share of {format_bnb(self.amount_per_winner)} {self.token}!", ephemeral=True)
 
                             # Send the BNB or BEP-20 token to the user immediately after claiming
-                            sender_data = get_user_data(self.author_id)
-                            recipient_data = get_user_data(interaction.user.id)
+                            sender_data = get_your_data(self.author_id)
+                            recipient_data = get_your_data(interaction.user.id)
                             
                             tx_hash = None
                             if self.token == "BNB":
@@ -2771,8 +2771,8 @@ async def airdrop(ctx, token: str, total_amount: float, winners: int):
                                     sender_data[f'{self.token.lower()}_balance'] -= Decimal(self.amount_per_winner)
                                     sender_data['bnb_balance'] -= Decimal(gas_fee_bnb)
 
-                                update_user_data(interaction.user.id, recipient_data)
-                                update_user_data(self.author_id, sender_data)
+                                update_your_data(interaction.user.id, recipient_data)
+                                update_your_data(self.author_id, sender_data)
 
                                 # Create a more appealing transaction message
                                 transaction_embed = discord.Embed(
@@ -2857,9 +2857,9 @@ async def submit_suggestion(ctx, category: str, *, suggestion: str):
 
 import sqlite3
 
-def create_stats_database():
+def create_your_database():
     # Connect to a new SQLite database (this will create the file if it doesn't exist)
-    conn = sqlite3.connect('stats_database.db')
+    conn = sqlite3.connect('your_database.db')
     cursor = conn.cursor()
 
     # Create a table for tracking stats if it doesn't exist
@@ -2877,11 +2877,11 @@ def create_stats_database():
     conn.commit()
     conn.close()
 
-create_stats_database()
+create_your_database()
 
 
 def update_user_stats(user_id, new_stats):
-    conn = sqlite3.connect('stats_database.db')
+    conn = sqlite3.connect('your_database.db')
     cursor = conn.cursor()
 
     # Ensure the user exists in the stats database
@@ -2907,7 +2907,7 @@ def update_user_stats(user_id, new_stats):
     conn.close()
 
 def get_user_stats(user_id):
-    conn = sqlite3.connect('stats_database.db')
+    conn = sqlite3.connect('your_database.db')
     cursor = conn.cursor()
 
     cursor.execute("SELECT total_fish, total_wood, total_ore, total_monsters FROM user_stats WHERE user_id = ?", (user_id,))
@@ -2929,6 +2929,93 @@ def get_user_stats(user_id):
             'ore': 0,
             'monsters': 0
         }
+
+# Adapter function to convert datetime to a string
+def adapt_datetime(dt):
+    return dt.isoformat()
+
+# Converter function to convert a string back to datetime
+def convert_datetime(s):
+    return datetime.datetime.fromisoformat(s.decode("utf-8"))
+
+# Register the adapter and converter with sqlite3
+sqlite3.register_adapter(datetime.datetime, adapt_datetime)
+sqlite3.register_converter("timestamp", convert_datetime)
+
+# Connect to the database with the custom converter
+conn = sqlite3.connect('your_database.db', detect_types=sqlite3.PARSE_DECLTYPES)
+c = conn.cursor()
+
+
+@bot.command(name="daily")
+async def daily(ctx):
+    try:
+        user_id = ctx.author.id
+        data = get_your_data(user_id)
+        
+        now = datetime.datetime.now(datetime.timezone.utc)
+        
+        # Check if the user has claimed daily rewards in the last 24 hours
+        if data["last_daily"] is not None:
+            last_daily = data["last_daily"]
+            delta = now - last_daily
+            if delta < datetime.timedelta(hours=24):
+                remaining_time = datetime.timedelta(hours=24) - delta
+                hours, remainder = divmod(remaining_time.seconds, 3600)
+                minutes, seconds = divmod(remainder, 60)
+                timeout_embed = discord.Embed(
+                    title="⏳ Daily Reward Cooldown",
+                    description=f"You have already claimed your daily reward!\n\nYou can claim again in **{hours}h {minutes}m {seconds}s**.",
+                    color=0xFFA500
+                )
+                await ctx.send(embed=timeout_embed, delete_after=10)
+                return
+
+        # Randomize XP and gold rewards
+        xp_reward = random.randint(200, 300)
+        gold_reward = random.randint(1000, 3000)
+
+        # Update user data
+        data["xp"] += xp_reward
+        data["gold"] += gold_reward
+        data["last_daily"] = now
+        update_your_data(user_id, data)
+
+        # Create and send the reward embed
+        embed = discord.Embed(
+            title="🎁 Daily Reward Claimed!",
+            description=f"**{ctx.author.mention}, you've received your daily rewards!**",
+            color=0x00FF00
+        )
+        embed.add_field(
+            name="XP Gained",
+            value=f"**{xp_reward}** XP 💪",
+            inline=True
+        )
+        embed.add_field(
+            name="Gold Gained",
+            value=f"**{gold_reward}** 🪙 Gold",
+            inline=True
+        )
+        embed.add_field(
+            name="Total XP",
+            value=f"**{data['xp']}** XP",
+            inline=True
+        )
+        embed.add_field(
+            name="Total Gold",
+            value=f"**{data['gold']}** Gold",
+            inline=True
+        )
+        embed.set_thumbnail(url=ctx.author.avatar.url)
+        embed.set_footer(text="Come back tomorrow for more rewards!")
+
+        await ctx.send(embed=embed, delete_after=30)
+
+        # Delete the user's command message immediately
+        await ctx.message.delete()
+    except Exception as e:
+        await send_error_to_channel(ctx, str(e))
 
 # Start the bot
 bot.run('')
