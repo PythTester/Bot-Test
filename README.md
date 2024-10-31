@@ -75,6 +75,8 @@ python bot.py
 
 - **!store** Show cards for sale in marketplace.
 
+- **!cards** Check current available cards.
+
 - **!buycard** Buy a card from the marketplace.
 
 **Economy Management** 💸
