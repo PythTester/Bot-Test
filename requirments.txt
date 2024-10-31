@@ -2,6 +2,7 @@ discord.py
 web3
 asyncio
 sqlite3
+logging
 requests
 eth-account
 decimal
