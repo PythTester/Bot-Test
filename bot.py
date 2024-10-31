@@ -3134,5 +3134,531 @@ async def daily(ctx):
     except Exception as e:
         await send_error_to_channel(ctx, str(e))
 
+# Card information with probabilities for each card
+cards = [
+    {"id": 1, "name": "Zeus", "image": "https://i.imgur.com/Lq7SRsv.png", "probability": 0.05},
+    {"id": 2, "name": "Hades", "image": "https://i.imgur.com/FoF4KFJ.png", "probability": 0.05},
+    {"id": 3, "name": "Nebuchanezzar", "image": "https://i.imgur.com/RB9nAx6.png", "probability": 0.10},
+    {"id": 4, "name": "Leonidas", "image": "https://i.imgur.com/yvkH8dP.png", "probability": 0.10},
+    {"id": 5, "name": "Yue Fei", "image": "https://i.imgur.com/eMhlQIC.png", "probability": 0.10},
+    {"id": 6, "name": "Alexander The Great", "image": "https://i.imgur.com/CvYdyqv.png", "probability": 0.10},
+    {"id": 7, "name": "Alfred The Great", "image": "https://i.imgur.com/AQr2x9a.png", "probability": 0.20},
+    {"id": 8, "name": "Napoleon", "image": "https://i.imgur.com/8qUQjP9.png", "probability": 0.20},
+    {"id": 9, "name": "Saladin", "image": "https://i.imgur.com/dCN6r1N.png", "probability": 0.10}
+]
+
+
+
+# Dictionaries for user cards, marketplace listings, and balances
+users_with_cards = {}
+marketplace = {}
+user_balances = {}
+user_stats = {}  # This will store wins, losses, and gold
+
+# Function to draw a card based on probability
+def draw_card():
+    return random.choices(
+        cards,
+        weights=[card["probability"] for card in cards],
+        k=1
+    )[0]
+
+# Command to start the game and draw the first card
+@bot.command(name="start")
+async def start(ctx):
+    user_id = ctx.author.id
+
+    # Check if user already has received their first card
+    if user_id in users_with_cards:
+        embed = discord.Embed(
+            title="You Already Have Your First Card!",
+            description=f"{ctx.author.mention}, you can only use this command once to receive your first card!",
+            color=discord.Color.red()
+        )
+        embed.set_footer(text="Use your cards wisely and trade in the marketplace!")
+        await ctx.send(embed=embed)
+        return
+
+    # Draw the first card based on probability
+    card = draw_card()
+    users_with_cards[user_id] = [card]  # Store the first card in a list
+
+    # Initialize user balance if they don't have one
+    if user_id not in user_balances:
+        user_balances[user_id] = 100  # Starting balance for new users
+
+    # Initialize user stats
+    user_stats[user_id] = {"wins": 0, "losses": 0, "gold": user_balances[user_id]}
+
+    # Create an embedded message with the card information
+    embed = discord.Embed(
+        title="You Received Your First Card!",
+        description=f"{ctx.author.mention}, congratulations on receiving your first card!",
+        color=discord.Color.blue()
+    )
+    embed.add_field(name="Card Name", value=card["name"], inline=False)
+    embed.set_image(url=card["image"])
+    if card["name"] == "Zeus":
+        embed.add_field(name="Special Message", value="You Received Zeus, the mighty ruler of Olympus!", inline=False)
+    embed.set_footer(text="Enjoy your card and good luck!")
+    await ctx.send(embed=embed)
+
+@bot.command(name="sell")
+async def sell(ctx, card_id: int, price: int):
+    user_id = ctx.author.id
+
+    # Check if user has any cards to sell
+    if user_id not in users_with_cards or not users_with_cards[user_id]:
+        await ctx.send(f"{ctx.author.mention}, you don't have any cards to sell!")
+        return
+
+    # Find the card by ID
+    card_to_sell = next((card for card in users_with_cards[user_id] if card["id"] == card_id), None)
+
+    if not card_to_sell:
+        await ctx.send(f"{ctx.author.mention}, you don't have a card with that ID!")
+        return
+
+    # Add card to the marketplace with the correct seller ID
+    marketplace[user_id] = {"card": card_to_sell, "price": price}
+
+    # Remove the card from the user's inventory
+    users_with_cards[user_id].remove(card_to_sell)
+
+    # Send confirmation message
+    embed = discord.Embed(
+        title="Card Listed for Sale",
+        description=f"{ctx.author.mention}, your card '{card_to_sell['name']}' has been listed for sale at {price} coins.",
+        color=discord.Color.green()
+    )
+    await ctx.send(embed=embed)
+
+
+
+@bot.command(name="store")
+async def store(ctx):
+    print("Current marketplace listings:", marketplace)  # Debug print to see current listings
+
+    # Check if the marketplace is empty
+    if not marketplace:
+        await ctx.send("The marketplace is currently empty.")
+        return
+
+    # Create an embed listing all cards in the marketplace
+    embed = discord.Embed(
+        title="Marketplace",
+        description="Cards available for sale:",
+        color=discord.Color.gold()
+    )
+
+    for seller_id, listing in marketplace.items():
+        card = listing["card"]
+        price = listing["price"]
+
+        try:
+            # Attempt to fetch the seller as a member in the current guild
+            seller = await ctx.guild.fetch_member(seller_id)  # Fetch member from the API
+            seller_name = seller.display_name  # Use the display name if found
+        except discord.NotFound:
+            seller_name = "Unknown User"  # Fallback if seller is not found
+
+        embed.add_field(
+            name=f"{card['name']} (ID: {card['id']}) - {price} coins",
+            value=f"Seller: {seller_name}",
+            inline=False
+        )
+
+    await ctx.send(embed=embed)
+
+
+
+@bot.command(name="buycard")
+async def buycard(ctx, seller: discord.Member, card_id: int):
+    buyer_id = ctx.author.id
+    seller_id = seller.id
+
+    # Check if the seller has cards listed in the marketplace
+    if seller_id not in marketplace:
+        await ctx.send(f"{seller.mention} doesn't have a card listed in the marketplace.")
+        return
+
+    listing = marketplace[seller_id]
+    card = listing["card"]
+
+    # Ensure the card ID matches
+    if card["id"] != card_id:
+        await ctx.send(f"{ctx.author.mention}, the requested card ID does not match the listing.")
+        return
+
+    # Check if the buyer has enough balance
+    price = listing["price"]
+    buyer_balance = user_balances.get(buyer_id, 0)
+
+    # Debugging: Check balances before the transaction
+    print(f"Before Transaction - Buyer ID: {buyer_id}, Buyer Balance: {buyer_balance}, Seller ID: {seller_id}, Seller Balance: {user_balances.get(seller_id, 0)}")
+
+    if buyer_balance < price:
+        await ctx.send(f"{ctx.author.mention}, you don't have enough coins to buy this card! You need {price} coins but have {buyer_balance} coins.")
+        return
+
+    # Deduct the price from the buyer and add it to the seller
+    user_balances[buyer_id] -= price
+    user_balances[seller_id] += price
+
+    # Debugging: Check balances after the transaction
+    print(f"After Transaction - Buyer ID: {buyer_id}, Buyer Balance: {user_balances[buyer_id]}, Seller ID: {seller_id}, Seller Balance: {user_balances[seller_id]}")
+
+    # Transfer the card to the buyer
+    if buyer_id not in users_with_cards:
+        users_with_cards[buyer_id] = []  # Initialize list if buyer doesn't have cards
+
+    users_with_cards[buyer_id].append(card)  # Add the card to the buyer's collection
+
+    # Remove the listing from the marketplace
+    del marketplace[seller_id]
+
+    # Send confirmation message
+    embed = discord.Embed(
+        title="Card Purchased",
+        description=f"{ctx.author.mention} bought {card['name']} from {seller.mention} for {price} coins!",
+        color=discord.Color.green()
+    )
+    await ctx.send(embed=embed)
+
+    # Update user profiles
+    await update_user_profile_balance(seller)  # Update seller's balance
+    await update_user_profile_balance(ctx.author)  # Update buyer's balance
+
+
+
+# Command to remove a card from the user's collection by card ID
+@bot.command(name="remove")
+async def remove_card(ctx, card_id: int):
+    user_id = ctx.author.id
+
+    # Check if user has any cards
+    if user_id not in users_with_cards or not users_with_cards[user_id]:
+        await ctx.send(f"{ctx.author.mention}, you don't have any cards to remove!")
+        return
+
+    # Find the card by ID
+    card_to_remove = next((card for card in users_with_cards[user_id] if card["id"] == card_id), None)
+
+    if not card_to_remove:
+        await ctx.send(f"{ctx.author.mention}, you don't have a card with that ID!")
+        return
+
+    # Remove the card from the user's inventory
+    users_with_cards[user_id].remove(card_to_remove)
+
+    # Send confirmation message
+    embed = discord.Embed(
+        title="Card Removed",
+        description=f"{ctx.author.mention}, you have successfully removed the card {card_to_remove['name']}.",
+        color=discord.Color.red()
+    )
+    await ctx.send(embed=embed)
+
+# Command to view the user's cards
+@bot.command(name="cards")
+async def view_cards(ctx):
+    user_id = ctx.author.id
+
+    # Check if user has any cards
+    if user_id not in users_with_cards or not users_with_cards[user_id]:
+        await ctx.send(f"{ctx.author.mention}, you don't have any cards!")
+        return
+
+    # Create an embed listing all user's cards
+    embed = discord.Embed(
+        title="Your Cards",
+        description="Here are the cards you own:",
+        color=discord.Color.blue()
+    )
+
+    for card in users_with_cards[user_id]:
+        embed.add_field(name=card["name"], value=f"ID: {card['id']}", inline=False)
+
+    await ctx.send(embed=embed)
+
+@bot.command(name="npc")
+async def npc_battle(ctx):
+    user_id = ctx.author.id
+
+    # Check if the user has a card
+    if user_id not in users_with_cards or not users_with_cards[user_id]:
+        await ctx.send(f"{ctx.author.mention}, you need a card to battle an NPC!")
+        return
+
+    # Randomly select an NPC card
+    npc_card = draw_card()
+
+    # Simulate the battle outcome
+    battle_outcome = random.choice(["win", "lose"])  # 50/50 chance to win or lose
+
+    # Initialize the embed for the battle result
+    embed = discord.Embed(
+        title="NPC Battle Result",
+        description=f"{ctx.author.mention}, you battled an NPC!",
+        color=discord.Color.blue()
+    )
+
+    if battle_outcome == "win":
+        # Update user stats for win
+        user_stats[user_id]["wins"] += 1
+        user_stats[user_id]["gold"] += 25  # Reward user with gold for winning
+
+        # Update profile balance accordingly
+        current_balance = user_stats[user_id]["gold"]
+
+        # 2% chance to upgrade to a Zeus or Hades card
+        if random.random() < 0.02:
+            upgrade_card_name = random.choice(["Zeus", "Hades"])  # Randomly choose between Zeus and Hades
+            new_card = next(card for card in cards if card["name"] == upgrade_card_name)
+
+            # Add new card to user's collection
+            users_with_cards[user_id].append(new_card)  
+            embed.add_field(name="Result", value="You won the battle and upgraded your card!", inline=False)
+            embed.add_field(name="New Card", value=new_card["name"], inline=False)
+            embed.set_image(url=new_card["image"])
+        else:
+            embed.add_field(name="Result", value="You won the battle!", inline=False)
+            embed.add_field(name="NPC Card", value=npc_card["name"], inline=False)
+            embed.set_image(url=npc_card["image"])
+
+        # Add the gold earned to the embed message
+        embed.add_field(name="Gold Earned", value="You earned 25 gold!", inline=False)
+        embed.add_field(name="Total Gold", value=f"{current_balance} gold", inline=False)
+
+    else:
+        # Update user stats for loss
+        user_stats[user_id]["losses"] += 1
+        embed.add_field(name="Result", value="You lost the battle!", inline=False)
+        embed.add_field(name="NPC Card", value=npc_card["name"], inline=False)
+        embed.set_image(url=npc_card["image"])
+
+        # 30% chance to lose the user's card
+        if random.random() < 0.30:
+            # Lose the user's card
+            lost_card = users_with_cards[user_id][0]  # Get the first card in the user's list
+            users_with_cards[user_id].remove(lost_card)  # Remove the lost card
+            embed.add_field(name="Card Lost", value=f"You lost your card: {lost_card['name']}!", inline=False)
+
+    # Send the embed message to the user
+    message = await ctx.send(embed=embed)  # Send the embed and store the message
+
+    # Update profile balance to reflect changes immediately after the battle
+    await update_user_profile_balance(ctx.author)  # Function to update the user's profile
+
+    await asyncio.sleep(30)  # Wait for 30 seconds
+    await message.delete()  # Delete the message after 30 seconds
+
+async def update_user_profile_balance(user: discord.Member):
+    """Function to update the user's profile balance."""
+    user_id = user.id
+    current_balance = user_stats[user_id]["gold"]
+    
+
+
+
+@bot.command(name="duel")
+async def duel(ctx, opponent: discord.Member):
+    user_id = ctx.author.id
+    opponent_id = opponent.id
+
+    # Check if both users have cards
+    if user_id not in users_with_cards or not users_with_cards[user_id]:
+        await ctx.send(f"{ctx.author.mention}, you need a card to duel!")
+        return
+
+    if opponent_id not in users_with_cards or not users_with_cards[opponent_id]:
+        await ctx.send(f"{opponent.mention} needs a card to duel!")
+        return
+
+    # Get the users' cards
+    user_card = users_with_cards[user_id][0]  # Assuming first card is used
+    opponent_card = users_with_cards[opponent_id][0]  # Assuming first card is used
+
+    # Determine win probabilities (including Zeus and Hades logic)
+    user_wins = False
+    if "Zeus" in user_card["name"] or "Hades" in user_card["name"]:
+        # User has Zeus or Hades: 65% chance to win against non-Zeus/Hades
+        user_wins = random.random() < (0.65 if not ("Zeus" in opponent_card["name"] or "Hades" in opponent_card["name"]) else 0.5)
+    else:
+        user_wins = random.random() < 0.5  # Normal 50% chance
+
+    # Prepare embed for duel result
+    embed = discord.Embed(
+        title="Duel Result",
+        description=f"{ctx.author.mention} duelled {opponent.mention}!",
+        color=discord.Color.red()
+    )
+
+    if user_wins:
+        # User wins
+        user_stats[user_id]["wins"] += 1
+        user_stats[opponent_id]["losses"] += 1
+        embed.add_field(name="Result", value="You won the duel!", inline=False)
+        embed.add_field(name="Your Card", value=user_card["name"], inline=False)
+        embed.set_image(url=user_card["image"])
+
+        # 2% chance to upgrade card
+        if random.random() < 0.02:
+            new_card = draw_card()  # Function to get a new card
+            users_with_cards[user_id].append(new_card)  # Add new card to user's collection
+            embed.add_field(name="Upgraded Card", value=f"You've upgraded to {new_card['name']}!", inline=False)
+            embed.set_image(url=new_card["image"])
+
+    else:
+        # User loses
+        user_stats[user_id]["losses"] += 1
+        user_stats[opponent_id]["wins"] += 1
+        embed.add_field(name="Result", value="You lost the duel!", inline=False)
+        embed.add_field(name="Opponent's Card", value=opponent_card["name"], inline=False)
+        embed.set_image(url=opponent_card["image"])
+
+        # 30% chance to lose their card
+        if random.random() < 0.30:
+            lost_card = users_with_cards[user_id][0]  # Get the first card in the user's list
+            users_with_cards[user_id].remove(lost_card)  # Remove the lost card
+            embed.add_field(name="Card Lost", value=f"You lost your card: {lost_card['name']}!", inline=False)
+
+    await ctx.send(embed=embed)  # Send the embed message
+
+
+@bot.command(name="p")
+async def p(ctx):
+    user_id = ctx.author.id
+
+    # Ensure the user has an entry in user_stats
+    if user_id not in user_stats:
+        await ctx.send(f"{ctx.author.mention}, you don't have a profile yet!")
+        return
+
+    # Get user stats and balance
+    user_data = user_stats[user_id]
+    gold_balance = user_data.get("gold", 0)
+    wins = user_data.get("wins", 0)
+    losses = user_data.get("losses", 0)
+
+    # Get cards owned by the user
+    user_cards = users_with_cards.get(user_id, [])
+    card_names = ", ".join(card["name"] for card in user_cards) if user_cards else "No cards owned"
+
+    # Create an embed for the profile
+    embed = discord.Embed(
+        title=f"{ctx.author.name}'s Profile",
+        description="Here are your current stats:",
+        color=discord.Color.green()
+    )
+    embed.add_field(name="Gold", value=f"{gold_balance} coins", inline=False)
+    embed.add_field(name="Wins", value=wins, inline=False)
+    embed.add_field(name="Losses", value=losses, inline=False)
+    embed.add_field(name="Cards Owned", value=card_names, inline=False)
+
+    await ctx.send(embed=embed)
+
+
+
+# Dictionary to track the last claim time for each user
+last_claim_time = {}
+
+@bot.command(name="claim")
+async def claim_card(ctx):
+    user_id = ctx.author.id
+
+    # Check if the user already has a card
+    if user_id in users_with_cards and users_with_cards[user_id]:
+        await ctx.send(f"{ctx.author.mention}, you already have a card! You cannot claim a new one.")
+        return
+
+    # Check the last claim time
+    current_time = discord.utils.utcnow()  # Get the current time in UTC
+    if user_id in last_claim_time:
+        time_since_last_claim = (current_time - last_claim_time[user_id]).total_seconds()
+        if time_since_last_claim < 86400:  # 86400 seconds in 24 hours
+            remaining_time = 86400 - time_since_last_claim
+            await ctx.send(f"{ctx.author.mention}, you need to wait {int(remaining_time // 3600)} hours and {int((remaining_time % 3600) // 60)} minutes before claiming again.")
+            return
+
+    # Claim a new card
+    new_card = draw_card()
+    users_with_cards[user_id] = [new_card]  # Assign the new card to the user
+
+    # Update the last claim time
+    last_claim_time[user_id] = current_time
+
+    # Create an embedded message with the new card information
+    embed = discord.Embed(
+        title="You Claimed a New Card!",
+        description=f"{ctx.author.mention}, congratulations on claiming a new card!",
+        color=discord.Color.green()
+    )
+    embed.add_field(name="Card Name", value=new_card["name"], inline=False)
+    embed.set_image(url=new_card["image"])
+    if new_card["name"] == "Zeus":
+        embed.add_field(name="Special Message", value="You Claimed Zeus, the mighty ruler of Olympus!", inline=False)
+    embed.set_footer(text="Enjoy your new card!")
+
+    await ctx.send(embed=embed)
+
+# Function to send a message and delete it after a specified duration
+async def send_and_delete(ctx, content, delete_after=30):
+    message = await ctx.send(content)  # Send the message
+    await asyncio.sleep(delete_after)  # Wait for the specified duration
+    await message.delete()  # Delete the message
+
+@bot.command(name="modgold")
+@commands.is_owner()  # Only allow the bot owner to use this command
+async def modgold(ctx, member: discord.Member, amount: int):
+    user_id = member.id
+
+    # Modify the user's gold balance
+    if user_id not in user_balances:
+        user_balances[user_id] = 0  # Initialize if not present
+
+    user_balances[user_id] += amount  # Update the balance
+
+    if amount > 0:
+        await send_and_delete(ctx, f"Added {amount} gold to {member.mention}. New balance: {user_balances[user_id]} gold.")
+    else:
+        await send_and_delete(ctx, f"Removed {-amount} gold from {member.mention}. New balance: {user_balances[user_id]} gold.")
+
+@bot.command(name="modcard")
+@commands.is_owner()  # Only allow the bot owner to use this command
+async def modcard(ctx, member: discord.Member, card_id: int = None):
+    user_id = member.id
+
+    if card_id is None:
+        # Give a random card to the specified member
+        card = draw_card()
+        if user_id not in users_with_cards:
+            users_with_cards[user_id] = []  # Initialize user's card list if it doesn't exist
+        
+        users_with_cards[user_id].append(card)  # Add the new card to the user's collection
+
+        # Create an embedded message with the card information
+        embed = discord.Embed(
+            title="You Received a New Card!",
+            description=f"{member.mention}, congratulations on receiving a new card!",
+            color=discord.Color.green()
+        )
+        embed.add_field(name="Card Name", value=card["name"], inline=False)
+        embed.set_image(url=card["image"])
+        await ctx.send(embed=embed)
+        
+    else:
+        # Take away a card from the specified member by card_id
+        if user_id in users_with_cards:
+            # Find and remove the card with the specified ID
+            card_to_remove = next((card for card in users_with_cards[user_id] if card["id"] == card_id), None)
+            if card_to_remove:
+                users_with_cards[user_id].remove(card_to_remove)
+                await send_and_delete(ctx, f"Removed card '{card_to_remove['name']}' from {member.mention}.")
+            else:
+                await send_and_delete(ctx, f"{member.mention} does not have a card with ID {card_id}.")
+        else:
+            await send_and_delete(ctx, f"{member.mention} has no cards.")
+
 # Start the bot
 bot.run('')
