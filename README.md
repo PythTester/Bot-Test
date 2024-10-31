@@ -67,6 +67,16 @@ python bot.py
 
 - **!mine:** Mine ores to earn XP.
 
+- **!start** Receive a beginners card.
+
+- **!npc** Battle an NPC for gold.
+
+- **!duel @user** Duel another player.
+
+- **!store** Show cards for sale in marketplace.
+
+- **!buycard** Buy a card from the marketplace.
+
 **Economy Management** 💸
 
 - **!profile [user]:** View your profile or another user's profile.
